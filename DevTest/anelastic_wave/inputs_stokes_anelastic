@@ -1,0 +1,54 @@
+# ANELASTIC viscous Stokes layer over the moving wave, orbital no-slip wall.
+# Same grid and physics as the JCP primary viscous verification (in.uniform: 50x4x200,
+# uniform dz=0.25, a=0.08, lambda=56.2, mu=0.8379, t=12 s = 2T), run with the anelastic
+# solver and the moving-mesh projection instead of acoustic substepping. No Rayleigh
+# sponge: the anelastic system has no sound to absorb. Explicit vertical diffusion
+# (nu dt/dz^2 = 0.054). Analyze the final plotfile with Exec/visc_test/stokes_compare.py.
+# Needs the TERRAIN_VELOCITY + FFT build.
+erf.prob_name = "Moving Terrain"
+erf.init_type = Isentropic
+stop_time = 12.0
+max_step  = 3000
+amrex.fpe_trap_invalid = 1
+fabarray.mfiter_tile_size = 1024 1024 1024
+geometry.prob_extent = 56.2 10.  50.
+amr.n_cell           =  50    4   200
+geometry.is_periodic = 1 1 0
+zlo.type = "NoSlipWall"
+zhi.type = "SlipWall"
+
+erf.terrain_type = MovingFittedMesh
+erf.terrain_smoothing = 2
+prob.custom_terrain_type = "MovingSineWave"
+prob.wavelength = 56.2
+prob.Ampl = 0.08
+prob.T_0  = 300.
+
+erf.anelastic             = 1
+erf.anelastic_moving_mesh = 1
+erf.use_fft               = true
+erf.poisson_reltol        = 1.e-10
+erf.poisson_abstol        = 1.e-10
+
+erf.fixed_dt = 0.004
+erf.use_gravity = true
+
+erf.dycore_horiz_adv_type  = Centered_2nd
+erf.dycore_vert_adv_type   = Centered_2nd
+erf.dryscal_horiz_adv_type = Centered_2nd
+erf.dryscal_vert_adv_type  = Centered_2nd
+erf.molec_diff_type = "Constant"
+erf.dynamic_viscosity = 0.8379
+erf.rho0_trans = 1.0
+erf.alpha_T = 0.0
+erf.les_type = "None"
+erf.vert_implicit = 0
+
+erf.sum_interval = -1
+erf.v = 0
+amr.v = 0
+amr.max_level = 0
+erf.check_int   = -1
+erf.plot_file_1 = plt
+erf.plot_int_1  = 1500
+erf.plot_vars_1 = density x_velocity y_velocity z_velocity pressure theta pres_hse dens_hse pert_pres pert_dens detJ z_phys

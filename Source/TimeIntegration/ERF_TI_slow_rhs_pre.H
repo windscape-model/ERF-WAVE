@@ -76,6 +76,26 @@
             z_t_pert = std::make_unique<MultiFab>(S_data[IntVars::zmom].boxArray(), S_data[IntVars::zmom].DistributionMap(), 1, 1);
             update_terrain_stage(level, old_step_time, old_stage_time, new_stage_time, slow_dt);
 
+            // Moving-mesh anelastic: re-project the stage-input momenta against THIS
+            // interval's mesh motion before any tendency is evaluated. The step-end
+            // projection satisfied the PREVIOUS interval's constraint, so without this
+            // the first-stage fluxes lag the mesh by one interval and theta picks up a
+            // phase-locked first-order error ~ 0.5 * theta0 * z_t * dt / dz at the
+            // surface. update_terrain_stage has just built this interval's geometry and
+            // grid velocity; base_state_new still holds the step-start base state, so
+            // the d(J rho0)/dt source uses the current Jacobians with r0_new = r0_old
+            // (the neglected base-state transport part is smaller by z_t dz(ln rho0),
+            // about 1e-5 relative). Only the stage-evaluation copy S_data is modified;
+            // S_old stays the conservative anchor of the update.
+            if (solverChoice.anelastic[level] && (nrk == 0) &&
+                solverChoice.anelastic_moving_mesh == 1)
+            {
+                project_momenta(level, old_stage_time, slow_dt, S_data);
+                S_data[IntVars::xmom].FillBoundary(fine_geom.periodicity());
+                S_data[IntVars::ymom].FillBoundary(fine_geom.periodicity());
+                S_data[IntVars::zmom].FillBoundary(fine_geom.periodicity());
+            }
+
               p0_to_use = MultiFab(base_state_new[level], make_alias, BaseState::p0_comp, 1);
             base_to_use = MultiFab(base_state_new[level], make_alias, 0, BaseState::num_comps);
              zpn_to_use =   z_phys_nd_src[level].get();

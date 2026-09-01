@@ -1,0 +1,65 @@
+# ANELASTIC miniature wall-modeled LES over the moving wave (the g4 configuration run
+# with the anelastic solver and the moving-mesh projection). MOST wave-drag wall model,
+# Smagorinsky + constant molecular viscosity, pressure-gradient ABL forcing. No acoustic
+# substepping and no Rayleigh sponge: the anelastic system has no sound. Smoke test:
+# runs, fields finite, theta perturbation bounded near the mK floor.
+# Needs the plain FFT build: ERF3d.gnu.TEST.MPI.FFT.ex.
+erf.prob_name        = "Moving Terrain"
+erf.init_type        = Isentropic
+stop_time            = 18000.0
+max_step             = 100
+amrex.fpe_trap_invalid = 1
+fabarray.mfiter_tile_size = 1024 1024 1024
+
+geometry.prob_extent = 200.  100.  300.
+amr.n_cell           = 32    16    32
+geometry.is_periodic = 1 1 0
+amr.max_level        = 0
+
+erf.terrain_type         = MovingFittedMesh
+erf.terrain_smoothing    = 2
+prob.custom_terrain_type = "MovingSineWaveRamp"
+prob.wavelength          = 100.0
+prob.Ampl                = 1.59
+prob.T_0                 = 300.
+
+prob.init_ustar          = 0.446
+prob.init_z0             = 0.0002
+prob.init_pert_amp       = 0.5
+
+zlo.type           = "surface_layer"
+erf.most.z0        = 0.0002
+erf.most.zref      = 4.6875
+erf.most.wave_drag = 1
+zhi.type = "SlipWall"
+
+erf.les_type          = "Smagorinsky"
+erf.Cs                = 0.10
+erf.molec_diff_type   = "Constant"
+erf.dynamic_viscosity = 1.0e-2
+erf.use_gravity       = true
+erf.alpha_T = 0.0
+
+erf.abl_driver_type   = "PressureGradient"
+erf.abl_pressure_grad = -9.95e-4  0.  0.
+
+erf.anelastic             = 1
+erf.anelastic_moving_mesh = 1
+erf.use_fft               = true
+erf.poisson_reltol        = 1.e-10
+erf.poisson_abstol        = 1.e-10
+
+erf.fixed_dt = 0.005
+
+erf.dycore_horiz_adv_type  = Centered_2nd
+erf.dycore_vert_adv_type   = Centered_2nd
+erf.dryscal_horiz_adv_type = Centered_2nd
+erf.dryscal_vert_adv_type  = Centered_2nd
+
+erf.sum_interval = -1
+erf.v = 0
+amr.v = 0
+erf.check_int   = -1
+erf.plot_file_1 = plt
+erf.plot_int_1  = 100
+erf.plot_vars_1 = density x_velocity y_velocity z_velocity pressure theta pert_pres pert_dens dens_hse detJ z_phys

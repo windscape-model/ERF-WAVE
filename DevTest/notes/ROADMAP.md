@@ -11,7 +11,7 @@ code with both equation sets and all three fidelity levels over the moving wave.
 | Compressible, moving wave | WORKS laminar (JCP Stokes case, TV wall, 0.95 percent amplitude error) | WIRING WORKS (smoke test below); physics validation open | WORKS (JCP turbulent cases, MOST wave drag) |
 | Anelastic, flat | WORKS upstream (Channel_DNS deck, Re_tau 395) | same knobs as compressible; untested | expected (upstream MOST); untested |
 | Anelastic, static wave | runs clean (stage A test below) | untested | untested |
-| Anelastic, moving wave | BLOCKED: projection not moving-mesh consistent (stage B is this development) | after stage B | after stage B |
+| Anelastic, moving wave | WORKS: Stokes 0.99 percent amplitude / 0.9 degree phase vs analytic (stage B + C) | WIRING WORKS (smoke, SGS + molecular + orbital wall) | WIRING WORKS (mini, MOST wave drag) |
 
 Evidence for the shared viscosity knobs:
 
@@ -107,17 +107,19 @@ start, fit of the oscillating mode over t = 16..20 s at dt = 0.0125):
   residual 100x larger) -- the anelastic solver needs no acoustic damping
   apparatus at all, which is the point of the capability.
 
-KNOWN REMAINING ARTIFACT (first order, bounded, non-accumulating): the step-start
-momenta satisfy the PREVIOUS interval's constraint (the projection is applied at
-interval end), so the theta field carries a phase-locked lag error with amplitude
-about 0.5 * 300 * z_t * dt / dz_bottom (measured 0.47 K at dt=0.05, 0.047 K at
-dt=0.005 on the 2 m grid). Remedy, designed but not yet implemented: re-project
-the step-start momenta against the UPCOMING interval's source at the top of stage
-1 (one extra Poisson solve per step; all machinery in place since
-update_terrain_stage runs first). Judge the need per application: for the JCP
-turbulence configuration (z_t ~ 1.25 m/s, dz = 0.5 m, dt = 0.005) the estimate is
-~1.9 K, so implement the re-projection BEFORE any anelastic WMLES study.
-Also inherited upstream: slow scalars (RhoKE etc.) get no Heun average on the
+PROJECTION-LAG REMEDY: IMPLEMENTED. The step-end projection satisfies the interval
+just completed, so the step-start momenta lagged the mesh by one interval and theta
+carried a phase-locked first-order error ~ 0.5 * 300 * z_t * dt / dz (0.47 K at
+dt=0.05). The fix re-projects the stage-input momenta against the UPCOMING
+interval at the top of stage 1 (`ERF_TI_slow_rhs_pre.H`, right after
+update_terrain_stage; one extra Poisson solve per step; only the stage-evaluation
+copy S_data is modified, S_old stays the conservative anchor; base_state_new still
+holds the step-start base state there, which is the correct source to within the
+base-state transport term ~1e-5 relative). Measured after the fix: theta error
+0.0070 K at dt=0.05 and 0.0058 K at dt=0.005 -- both at the mK physical floor,
+no longer dt-limited. Wave validation improved to w max 0.95 percent / mean 0.56
+percent, u max 0.52 percent, phase < 0.44 degrees.
+Still inherited upstream: slow scalars (RhoKE etc.) get no Heun average on the
 moving mesh (`ERF_SlowRhsPost.cpp` moving branch), and the moving refold is not
 wired for `vert_implicit` + anelastic (guard that combination if it comes up).
 
@@ -167,9 +169,24 @@ new-time base state as part of item 1.
 ### Stage C: the fidelity ladder under anelastic
 
 DNS / WRLES / WMLES knobs are equation-set independent (same diffusion and MOST
-code paths), so after stage B this is configuration + testing, not development:
-anelastic Stokes DNS (stage B item 3 doubles as this), anelastic WRLES smoke
-(wrles_wave deck + anelastic=1), anelastic WMLES mini (g4 + anelastic=1).
+code paths), so after stage B this is configuration + testing, not development.
+Status:
+
+- WMLES mini (`inputs_wmles_anelastic`, the g4 configuration with anelastic=1,
+  no substepping, no sponge): runs 100 steps clean on the FFT build; rho pin
+  exact, theta perturbation 0.03 K (bounded), log-law u range preserved, fields
+  finite. Ready for a longer statistics A/B against compressible g4 when needed.
+- Viscous Stokes DNS (`inputs_stokes_anelastic`, the JCP in.uniform grid on the
+  TV+FFT build, no sponge, no substepping, t = 12 s = 2T): amplitude L2 error
+  0.99 percent, mean phase lag 0.9 degrees against the analytic Stokes solution
+  (`Exec/visc_test/stokes_compare.py`) -- matching the JCP compressible
+  verification (0.95 percent, +0.910 degrees). Theta stays within 7 mK over the
+  two periods; rho pin exact.
+- WRLES smoke under anelastic (wrles_wave deck + anelastic overrides on the
+  TV+FFT build, `erf.rayleigh_damp_W=0` to switch the deck's sponge off): runs
+  clean; eddy viscosity active (Kmv 2e-3 m2/s), theta within 2 mK, rho pin
+  exact. NOTE: the "off" switch for Rayleigh damping is the per-variable damp
+  flags; `rayleigh_damping_type` has no None token.
 
 ## Build variants (GNU make, from Exec/)
 
@@ -177,6 +194,9 @@ anelastic Stokes DNS (stage B item 3 doubles as this), anelastic WRLES smoke
     make -j8 USE_NETCDF=FALSE TERRAIN_VELOCITY=TRUE    -> ERF3d.gnu.TEST.MPI.TV.ex   (gate g3, WRLES smoke)
     CPATH=$HOME/local/include LIBRARY_PATH=$HOME/local/lib \
     make -j8 USE_NETCDF=FALSE USE_FFT=TRUE             -> ERF3d.gnu.TEST.MPI.FFT.ex  (anelastic wave work)
+    CPATH=$HOME/local/include LIBRARY_PATH=$HOME/local/lib \
+    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE TERRAIN_VELOCITY=TRUE \
+                                                       -> ERF3d.gnu.TEST.MPI.TV.FFT.ex (anelastic Stokes)
 
 USE_NETCDF=FALSE because the local NetCDF (4.10.1 in ~/local) lost parallel support
 (`netcdf_par.h` gone); no wave or gate case reads NetCDF. The July NetCDF-enabled
