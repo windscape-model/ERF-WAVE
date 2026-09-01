@@ -24,6 +24,7 @@ EXEC_DIR="$GATES_DIR/../../Exec"
 FCOMPARE="$GATES_DIR/../../Submodules/AMReX/Tools/Plotfile/fcompare.gnu.ex"
 PLAIN_EXE="$EXEC_DIR/ERF3d.gnu.TEST.MPI.ex"
 TV_EXE="$EXEC_DIR/ERF3d.gnu.TEST.MPI.TV.ex"
+FFT_EXE="$EXEC_DIR/ERF3d.gnu.TEST.MPI.FFT.ex"
 NRANKS=4
 
 MAKE_REFS=0
@@ -33,7 +34,7 @@ for arg in "$@"; do
 done
 if [ ${#GATE_LIST[@]} -eq 0 ]; then
     GATE_LIST=(g1_inviscid_wave_sub g2_inviscid_wave_endpoint g3_stokes_viscous_tv \
-               g4_wmles_most_wavedrag g5_anelastic_densitycurrent)
+               g4_wmles_most_wavedrag g5_anelastic_densitycurrent g6_anelastic_moving_wave)
 fi
 
 # Expand short names (g1 -> g1_inviscid_wave_sub)
@@ -44,14 +45,16 @@ expand_gate () {
         g3) echo g3_stokes_viscous_tv ;;
         g4) echo g4_wmles_most_wavedrag ;;
         g5) echo g5_anelastic_densitycurrent ;;
+        g6) echo g6_anelastic_moving_wave ;;
         *)  echo "$1" ;;
     esac
 }
 
 gate_binary () {
     case "$1" in
-        g3_stokes_viscous_tv) echo "$TV_EXE" ;;
-        *)                    echo "$PLAIN_EXE" ;;
+        g3_stokes_viscous_tv)      echo "$TV_EXE" ;;
+        g6_anelastic_moving_wave)  echo "$FFT_EXE" ;;
+        *)                         echo "$PLAIN_EXE" ;;
     esac
 }
 
@@ -69,6 +72,11 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
     echo "== Building the TERRAIN_VELOCITY executable =="
     ( cd "$EXEC_DIR" && make -j8 USE_NETCDF=FALSE TERRAIN_VELOCITY=TRUE ) > "$GATES_DIR/_build_tv.log" 2>&1 \
         || { echo "BUILD FAILED (TV); see _build_tv.log"; exit 2; }
+    # FFTW lives in ~/local (no system paths); the FFT build hosts the anelastic gate g6.
+    echo "== Building the FFT executable =="
+    ( cd "$EXEC_DIR" && CPATH=$HOME/local/include LIBRARY_PATH=$HOME/local/lib \
+      make -j8 USE_NETCDF=FALSE USE_FFT=TRUE ) > "$GATES_DIR/_build_fft.log" 2>&1 \
+        || { echo "BUILD FAILED (FFT); see _build_fft.log"; exit 2; }
 fi
 
 FAIL=0

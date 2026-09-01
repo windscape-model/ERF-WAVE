@@ -55,10 +55,10 @@ Open items, in order:
    amplitude error). Wall-resolved grids want implicit vertical diffusion, so this is
    worth fixing behind a flag. Entry points: `Source/Diffusion/ERF_ImplicitDiff_T.cpp`,
    `Source/TimeIntegration/ERF_ImplicitPre.H` / `ERF_ImplicitPost.H`.
-3. Check one stress detail found while reading: in `ERF_ComputeStress_T.cpp` the
-   metric cross-term correction to tau13 uses an average built from `mu_turb` only
-   (search `mu_bar`); confirm whether the molecular part belongs there too and add it
-   if so (matters only for resolved runs over steep waves).
+3. RESOLVED (2026-09-01, full read): the tau13/tau23 metric cross-term in
+   `ERF_ComputeStress_T.cpp` averages `rhoAlpha_bar` (molecular) alongside `mu_bar`
+   (eddy) and sums both into `mu_tot` -- the molecular part IS included. The earlier
+   flag came from a truncated grep window; no change needed.
 4. Near-wall SGS behavior (no wall damping in plain Smagorinsky): acceptable for
    capability release; note in the docs, consider Deardorff for production WRLES.
 
@@ -120,8 +120,22 @@ base-state transport term ~1e-5 relative). Measured after the fix: theta error
 no longer dt-limited. Wave validation improved to w max 0.95 percent / mean 0.56
 percent, u max 0.52 percent, phase < 0.44 degrees.
 Still inherited upstream: slow scalars (RhoKE etc.) get no Heun average on the
-moving mesh (`ERF_SlowRhsPost.cpp` moving branch), and the moving refold is not
-wired for `vert_implicit` + anelastic (guard that combination if it comes up).
+moving mesh (`ERF_SlowRhsPost.cpp` moving branch). `vert_implicit` +
+`anelastic_moving_mesh` now ABORTS with a clear message (untested combination;
+use explicit vertical diffusion).
+
+TEMPORAL ORDER (measured 2026-09-01): the anelastic integration is FIRST order in
+time, and that is an UPSTREAM property, not a moving-mesh one. Evidence: dt-halving
+Richardson on the moving wave gives order 1.0 in u, w, theta, pert_pres; the same
+study on the STATIC-terrain anelastic density current (pure upstream path) gives
+0.84-0.93. The stage-projection Heun with incremental pressure carries the classic
+projection-splitting order limit. The JCP compressible scheme is the second-order
+one; a second-order anelastic would need a time-centered pressure treatment in the
+upstream integrator -- out of scope here. At practical dt the first-order error is
+small (the 0.95 percent wave validation at dt = 0.0125 already contains it).
+
+RESTART (measured 2026-09-01): checkpoint at step 100, restart to step 200,
+compare with the uninterrupted run -- bit-for-bit identical in every field.
 
 ### The three defects fixed (stage B history)
 

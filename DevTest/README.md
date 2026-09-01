@@ -26,6 +26,7 @@ The JCP manuscript does not present any capability developed here.
 | g3_stokes_viscous_tv | viscous Stokes layer, orbital no-slip wall (TV build) | TERRAIN_VELOCITY wall BC, constant viscosity, FastImplicit sponge |
 | g4_wmles_most_wavedrag | miniature wall-modeled LES over the wave | MOST wave drag, Smagorinsky + molecular viscosity, ABL forcing |
 | g5_anelastic_densitycurrent | anelastic density current, flat static grid | the anelastic projection machinery the wave work extends |
+| g6_anelastic_moving_wave | anelastic moving wave, moving-mesh projection (FFT build) | the new capability itself: stage-target geometry, grid-relative Omega, d(J rho0)/dt source, rho pin, refold, re-projection |
 
 Usage, from `DevTest/gates/`:
 

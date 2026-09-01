@@ -685,6 +685,18 @@ struct SolverChoice {
                  pp.getarr("vert_implicit_fac", vert_implicit_fac);
              }
 
+             // The moving-mesh anelastic refold (ERF_TI_slow_rhs_pre.H) reconstructs the
+             // first-stage tendency from the realized J-weighted update; the implicit-
+             // diffusion path rewrites the tendency after that reconstruction point and
+             // has not been wired for this combination. Refuse it instead of running an
+             // untested mix.
+             if (anelastic_moving_mesh == 1 &&
+                 (vert_implicit_fac[0] > zero || vert_implicit_fac[1] > zero ||
+                  vert_implicit_fac[2] > zero)) {
+                 amrex::Error("erf.vert_implicit is not yet supported with "
+                              "erf.anelastic_moving_mesh; use explicit vertical diffusion");
+             }
+
              // If true (default), include implicit contributions to vertical
              // thermal diffusion
              pp.query("implicit_thermal_diffusion", implicit_thermal_diffusion);
