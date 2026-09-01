@@ -41,4 +41,5 @@ parallel support since the August environment change; no gate or wave case reads
 
     gates/          regression gates + references (references are committed)
     notes/          development and design notes (ROADMAP.md is the plan of record)
-    <case dirs>     new capability test cases, added as the work proceeds
+    wrles_wave/     wall-resolved LES over the moving wave (compressible, TV build)
+    anelastic_wave/ anelastic wave cases: static baseline + moving as-is record (FFT build)
