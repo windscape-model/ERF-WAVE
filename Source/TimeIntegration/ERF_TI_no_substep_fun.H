@@ -307,5 +307,20 @@
             } else {
                 project_momenta(level, time_for_fp, slow_dt, S_sum);
             }
+
+            if (solverChoice.terrain_type == TerrainType::MovingFittedMesh &&
+                solverChoice.anelastic_moving_mesh == 1)
+            {
+                // Anelastic density IS the base state. With the zero rho tendency
+                // (fixed_density) the moving-mesh update above left only the
+                // volume-dilution part of the density change, so pin rho to the
+                // transported base state on the stage-target mesh (whose ghosts were
+                // just imposed on the new geometry in slow_rhs_pre).
+                MultiFab r0_new(base_state_new[level], make_alias, BaseState::r0_comp, 1);
+                IntVect ng_pin = amrex::elemwiseMin(S_sum[IntVars::cons].nGrowVect(),
+                                                    r0_new.nGrowVect());
+                MultiFab::Copy(S_sum[IntVars::cons], r0_new, 0, Rho_comp, 1, ng_pin);
+                S_sum[IntVars::cons].FillBoundary(Rho_comp, 1, fine_geom.periodicity());
+            }
         }
     };

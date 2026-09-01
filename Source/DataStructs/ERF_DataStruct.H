@@ -479,6 +479,23 @@ struct SolverChoice {
             }
         }
 
+        // The anelastic projection on a MOVING fitted mesh needs the stage-target geometry,
+        // the flux relative to the moving grid, and the discrete d(J rho0)/dt source
+        // (ERF_PoissonSolve.cpp). That path is enabled by erf.anelastic_moving_mesh = 1;
+        // without it we refuse the combination rather than run the static-mesh projection
+        // silently against a moving mesh.
+        pp.query("anelastic_moving_mesh", anelastic_moving_mesh);
+        for (int lev = 0; lev <= max_level; lev++) {
+            if (anelastic[lev] != 0 &&
+                terrain_type == TerrainType::MovingFittedMesh &&
+                anelastic_moving_mesh != 1)
+            {
+                amrex::Error("Anelastic with terrain_type = MovingFittedMesh requires "
+                             "erf.anelastic_moving_mesh = 1 (the moving-mesh projection); "
+                             "without it the projection would enforce the static-mesh constraint");
+            }
+        }
+
         pp.query("force_stage1_single_substep", force_stage1_single_substep);
 
         // Include Coriolis forcing?
@@ -1153,6 +1170,10 @@ struct SolverChoice {
 
     amrex::Vector<SubsteppingType> substepping_type;
     amrex::Vector<int> anelastic;
+    // Anelastic on a moving fitted mesh: enables the moving-mesh projection (stage-target
+    // geometry, grid-relative Omega, d(J rho0)/dt source). Default 0 = the combination
+    // aborts instead of silently projecting the static-mesh constraint.
+    int anelastic_moving_mesh = 0;
     amrex::Vector<int> fixed_density;
     amrex::Vector<int> project_initial_velocity;
     amrex::Vector<int> buoyancy_type;

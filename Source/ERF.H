@@ -200,8 +200,14 @@ public:
     void WriteMyEBSurface ();
 
     // Compute the divergence -- whether EB, no-terrain, flat terrain or general terrain
+    // The three optional arguments override the geometry seen by the general-terrain branch
+    // (used by the moving-mesh anelastic projection to evaluate the divergence on the
+    // stage-target mesh); when null the level's own ax/ay/detJ_cc are used.
     void compute_divergence (int lev, amrex::MultiFab& rhs, amrex::Array<amrex::MultiFab const*,AMREX_SPACEDIM> rho0_u_const,
-                             amrex::Geometry const& geom_at_lev);
+                             amrex::Geometry const& geom_at_lev,
+                             const amrex::MultiFab* ax_ovr = nullptr,
+                             const amrex::MultiFab* ay_ovr = nullptr,
+                             const amrex::MultiFab* detJ_ovr = nullptr);
 
     // Project the velocities to be divergence-free -- this is only relevant if anelastic == 1
     void project_initial_velocity (int lev, amrex::Real time, amrex::Real dt);

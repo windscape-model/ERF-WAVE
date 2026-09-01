@@ -233,6 +233,75 @@
 #endif
 
         // *****************************************************************************
+        // Moving-mesh Heun refold for the anelastic second stage. The static-mesh refold
+        // inside erf_slow_rhs_pre reconstructs the first-stage tendency as (S1 - S0)/dt,
+        // which on the moving mesh spuriously contains the volume-dilution rate
+        // -S d(lnJ)/dt (that reconstruction is disabled there when the mesh moves).
+        // Reconstruct with the weights of the actual first-stage update instead:
+        //     cons:      dt J_src F0 = J_new S1 - J_old S0
+        //     x/y-mom:   dt       F0 = h_zeta_new S1 - h_zeta_old S0
+        // so the tendency taken into the final stage is (F1 + F0_realized)/2.
+        // (The w tendency has no refold on either mesh, matching the static path.)
+        // *****************************************************************************
+        if (solverChoice.anelastic[level] && (nrk == 1) &&
+            solverChoice.terrain_type == TerrainType::MovingFittedMesh)
+        {
+            Real inv_slow_dt = one / slow_dt;
+#ifdef _OPENMP
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
+#endif
+            for ( MFIter mfi(S_rhs[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
+            {
+                Box bx  = mfi.tilebox();
+                Box tbx = mfi.nodaltilebox(0);
+                Box tby = mfi.nodaltilebox(1);
+
+                const Array4<Real      >& cons_rhs = S_rhs[IntVars::cons].array(mfi);
+                const Array4<Real const>& cons_new = S_data[IntVars::cons].const_array(mfi);
+                const Array4<Real const>& cons_old =  S_old[IntVars::cons].const_array(mfi);
+
+                const Array4<Real      >& xmom_rhs = S_rhs[IntVars::xmom].array(mfi);
+                const Array4<Real const>& xmom_new = S_data[IntVars::xmom].const_array(mfi);
+                const Array4<Real const>& xmom_old =  S_old[IntVars::xmom].const_array(mfi);
+
+                const Array4<Real      >& ymom_rhs = S_rhs[IntVars::ymom].array(mfi);
+                const Array4<Real const>& ymom_new = S_data[IntVars::ymom].const_array(mfi);
+                const Array4<Real const>& ymom_old =  S_old[IntVars::ymom].const_array(mfi);
+
+                const Array4<Real const>& dJ_old_arr =     detJ_cc[level]->const_array(mfi);
+                const Array4<Real const>& dJ_new_arr = detJ_cc_new[level]->const_array(mfi);
+                const Array4<Real const>& dJ_src_arr = detJ_cc_src[level]->const_array(mfi);
+
+                const Array4<Real const>& z_nd_old =     z_phys_nd[level]->const_array(mfi);
+                const Array4<Real const>& z_nd_new = z_phys_nd_new[level]->const_array(mfi);
+
+                amrex::ParallelFor(bx, 2,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
+                {
+                    Real f0 = (dJ_new_arr(i,j,k) * cons_new(i,j,k,n) -
+                               dJ_old_arr(i,j,k) * cons_old(i,j,k,n)) * inv_slow_dt / dJ_src_arr(i,j,k);
+                    cons_rhs(i,j,k,n) = myhalf * (cons_rhs(i,j,k,n) + f0);
+                });
+
+                amrex::ParallelFor(tbx, tby,
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real hz_old = Compute_h_zeta_AtIface(i, j, k, dxInv, z_nd_old);
+                    Real hz_new = Compute_h_zeta_AtIface(i, j, k, dxInv, z_nd_new);
+                    Real f0 = (hz_new * xmom_new(i,j,k) - hz_old * xmom_old(i,j,k)) * inv_slow_dt;
+                    xmom_rhs(i,j,k) = myhalf * (xmom_rhs(i,j,k) + f0);
+                },
+                [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real hz_old = Compute_h_zeta_AtJface(i, j, k, dxInv, z_nd_old);
+                    Real hz_new = Compute_h_zeta_AtJface(i, j, k, dxInv, z_nd_new);
+                    Real f0 = (hz_new * ymom_new(i,j,k) - hz_old * ymom_old(i,j,k)) * inv_slow_dt;
+                    ymom_rhs(i,j,k) = myhalf * (ymom_rhs(i,j,k) + f0);
+                });
+            } // mfi
+        }
+
+        // *****************************************************************************
         // Update for moving terrain
         // *****************************************************************************
         if ( solverChoice.terrain_type == TerrainType::MovingFittedMesh )

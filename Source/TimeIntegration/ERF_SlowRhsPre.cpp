@@ -671,7 +671,11 @@ void erf_slow_rhs_pre (int level, int finest_level,
         });
 
         // If anelastic and in second RK stage, take average of old-time and new-time source
-        if ( l_anelastic && (nrk == 1) )
+        // On the moving mesh this reconstruction of the first-stage tendency from
+        // (S1 - S0)/dt is wrong -- the realized first-stage update was J-weighted, so the
+        // difference contains the volume-dilution rate -S d(lnJ)/dt. The moving-mesh
+        // J-weighted refold is applied in ERF_TI_slow_rhs_pre.H instead.
+        if ( l_anelastic && (nrk == 1) && !l_moving_terrain )
         {
             ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
@@ -750,7 +754,8 @@ void erf_slow_rhs_pre (int level, int finest_level,
                 rho_u_rhs(i, j, k) *= h_zeta;
             }
 
-            if ( l_anelastic && (nrk == 1) ) {
+            // Moving-mesh refold happens in ERF_TI_slow_rhs_pre.H (h_zeta-weighted)
+            if ( l_anelastic && (nrk == 1) && !l_moving_terrain ) {
                 rho_u_rhs(i,j,k) *= myhalf;
                 rho_u_rhs(i,j,k) += myhalf / dt * (rho_u(i,j,k) - rho_u_old(i,j,k));
             }
@@ -769,7 +774,8 @@ void erf_slow_rhs_pre (int level, int finest_level,
                 rho_v_rhs(i, j, k) *= h_zeta;
             }
 
-            if ( l_anelastic && (nrk == 1) ) {
+            // Moving-mesh refold happens in ERF_TI_slow_rhs_pre.H (h_zeta-weighted)
+            if ( l_anelastic && (nrk == 1) && !l_moving_terrain ) {
                 rho_v_rhs(i,j,k) *= myhalf;
                 rho_v_rhs(i,j,k) += myhalf / dt * (rho_v(i,j,k) - rho_v_old(i,j,k));
             }

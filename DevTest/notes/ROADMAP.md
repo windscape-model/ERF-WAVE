@@ -82,7 +82,46 @@ Open items, in order:
   - moving wave AS-IS: runs, no assert stops it, solver reports divergence 5e-14 —
     but of the WRONG (static-mesh) constraint. Silent inconsistency, see below.
 
-### The three defects to fix (stage B)
+### Stage B status (2026-09-01): IMPLEMENTED and validated at the 1 percent level
+
+All three defects below are fixed behind `erf.anelastic_moving_mesh = 1` (default:
+the combination aborts). A FOURTH defect was found during validation and fixed:
+the anelastic second-RK-stage Heun refold in `ERF_SlowRhsPre.cpp` reconstructed the
+first-stage tendency as (S1-S0)/dt, a static-mesh identity; on the moving mesh that
+difference contains the volume-dilution rate -S d(lnJ)/dt, which corrupted theta by
+~0.9 K (dt-independent, phase-locked, surface-peaked) and the momenta likewise.
+The refold is now J-weighted on the moving mesh (`ERF_TI_slow_rhs_pre.H`):
+dt Jsrc F0 = J1 S1 - J0 S0 for cons, h_zeta-weighted for x/y momenta.
+
+Validation (reflection-free wave geometry, a=0.16, lambda=100, rigid lid, ramped
+start, fit of the oscillating mode over t = 16..20 s at dt = 0.0125):
+
+- w amplitude vs the analytic lid-bounded potential flow: 0.07 percent at the
+  surface, max 1.2 percent, mean 0.7 percent over the column; u max 0.7 percent;
+  phase 0.3-0.45 degrees; quasi-steady residual mode 4e-4 m/s (0.3 percent).
+- density pin exact (max|rho - rho0| = 0); projected divergence at solver
+  tolerance with the d(J rho0)/dt source included (the only remainder is the
+  spatially constant solvability mean, the base-state inventory term).
+- The compressible twin (same grid and duration, no sponge) agrees near the
+  surface but is contaminated aloft by lid-trapped acoustic modes (two-mode fit
+  residual 100x larger) -- the anelastic solver needs no acoustic damping
+  apparatus at all, which is the point of the capability.
+
+KNOWN REMAINING ARTIFACT (first order, bounded, non-accumulating): the step-start
+momenta satisfy the PREVIOUS interval's constraint (the projection is applied at
+interval end), so the theta field carries a phase-locked lag error with amplitude
+about 0.5 * 300 * z_t * dt / dz_bottom (measured 0.47 K at dt=0.05, 0.047 K at
+dt=0.005 on the 2 m grid). Remedy, designed but not yet implemented: re-project
+the step-start momenta against the UPCOMING interval's source at the top of stage
+1 (one extra Poisson solve per step; all machinery in place since
+update_terrain_stage runs first). Judge the need per application: for the JCP
+turbulence configuration (z_t ~ 1.25 m/s, dz = 0.5 m, dt = 0.005) the estimate is
+~1.9 K, so implement the re-projection BEFORE any anelastic WMLES study.
+Also inherited upstream: slow scalars (RhoKE etc.) get no Heun average on the
+moving mesh (`ERF_SlowRhsPost.cpp` moving branch), and the moving refold is not
+wired for `vert_implicit` + anelastic (guard that combination if it comes up).
+
+### The three defects fixed (stage B history)
 
 In `project_momenta` and `compute_divergence`, on MovingFittedMesh:
 

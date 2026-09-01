@@ -7,7 +7,8 @@ using namespace amrex;
  * Project the single-level velocity field to enforce incompressibility
  * Note that the level may or may not be level zero
  */
-void ERF::compute_divergence (int lev, MultiFab& rhs, Array<MultiFab const*,AMREX_SPACEDIM> rho0_u_const, Geometry const& geom_at_lev)
+void ERF::compute_divergence (int lev, MultiFab& rhs, Array<MultiFab const*,AMREX_SPACEDIM> rho0_u_const, Geometry const& geom_at_lev,
+                              const MultiFab* ax_ovr, const MultiFab* ay_ovr, const MultiFab* detJ_ovr)
 {
     BL_PROFILE("ERF::compute_divergence()");
 
@@ -57,10 +58,12 @@ void ERF::compute_divergence (int lev, MultiFab& rhs, Array<MultiFab const*,AMRE
             {
                 //
                 // Note we compute the divergence using "rho0w" == Omega
+                // The overrides (when given) evaluate the divergence on another mesh
+                // (the moving-mesh anelastic projection passes the stage-target geometry).
                 //
-                const Array4<Real const>& ax_arr = ax[lev]->const_array(mfi);
-                const Array4<Real const>& ay_arr = ay[lev]->const_array(mfi);
-                const Array4<Real const>& dJ_arr = detJ_cc[lev]->const_array(mfi);
+                const Array4<Real const>& ax_arr = (ax_ovr)   ? ax_ovr->const_array(mfi)   : ax[lev]->const_array(mfi);
+                const Array4<Real const>& ay_arr = (ay_ovr)   ? ay_ovr->const_array(mfi)   : ay[lev]->const_array(mfi);
+                const Array4<Real const>& dJ_arr = (detJ_ovr) ? detJ_ovr->const_array(mfi) : detJ_cc[lev]->const_array(mfi);
 
                 ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
                 {

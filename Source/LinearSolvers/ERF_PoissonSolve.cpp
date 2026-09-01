@@ -34,6 +34,19 @@ void ERF::project_initial_velocity (int lev, Real time, Real l_dt)
     // Impose FillBoundary on density since we use it in the conversion of velocity to momentum
     vars_new[lev][Vars::cons].FillBoundary(geom[lev].periodicity());
 
+    // This projection can run before any step has filled the stage arrays. Make the
+    // "new" geometry the current one and the grid velocity zero, so the moving-mesh
+    // projection path degenerates exactly to the static projection at this instant.
+    if (solverChoice.terrain_type == TerrainType::MovingFittedMesh &&
+        solverChoice.anelastic_moving_mesh == 1)
+    {
+        MultiFab::Copy(*z_phys_nd_new[lev], *z_phys_nd[lev], 0, 0, 1, z_phys_nd_new[lev]->nGrowVect());
+        MultiFab::Copy(  *detJ_cc_new[lev],   *detJ_cc[lev], 0, 0, 1,   detJ_cc_new[lev]->nGrowVect());
+        MultiFab::Copy(base_state_new[lev], base_state[lev], 0, 0, BaseState::num_comps,
+                       base_state_new[lev].nGrowVect());
+        z_t_rk[lev]->setVal(0.0);
+    }
+
     const MultiFab* c_vfrac = nullptr;
     if (solverChoice.terrain_type == TerrainType::EB) {
         c_vfrac = &((get_eb(lev).get_const_factory())->getVolFrac());
@@ -119,7 +132,35 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
 
     Box domain = geom[lev].Domain();
 
-    MultiFab r_hse(base_state[lev], make_alias, BaseState::r0_comp, 1);
+    // Moving-mesh anelastic projection (erf.anelastic_moving_mesh): enforce the constraint
+    // on the stage-target mesh, project the flux relative to the moving grid, and add the
+    // discrete d(J rho0)/dt source below. Every piece reduces identically to the static
+    // path when the mesh is not moving, and the flag defaults to off.
+    const bool l_moving_proj = (solverChoice.terrain_type == TerrainType::MovingFittedMesh) &&
+                               (solverChoice.anelastic_moving_mesh == 1);
+
+    if (l_moving_proj && subdomains[lev].size() > 1) {
+        amrex::Abort("anelastic_moving_mesh does not yet support multiple solve regions");
+    }
+
+    // Geometry the projection sees: the stage-target ("new") mesh when moving, else the
+    // level's mesh. The stage machinery makes detJ_cc_new but not the new-mesh areas, so
+    // build those here.
+    MultiFab* zpn_proj = (l_moving_proj) ? z_phys_nd_new[lev].get() : z_phys_nd[lev].get();
+    MultiFab* dJ_proj  = (l_moving_proj) ?   detJ_cc_new[lev].get() :   detJ_cc[lev].get();
+    MultiFab ax_proj, ay_proj, az_proj;
+    if (l_moving_proj) {
+        ax_proj.define(ax[lev]->boxArray(), ax[lev]->DistributionMap(), 1, ax[lev]->nGrowVect());
+        ay_proj.define(ay[lev]->boxArray(), ay[lev]->DistributionMap(), 1, ay[lev]->nGrowVect());
+        az_proj.define(az[lev]->boxArray(), az[lev]->DistributionMap(), 1, az[lev]->nGrowVect());
+        make_areas(geom[lev], *z_phys_nd_new[lev], ax_proj, ay_proj, az_proj);
+    }
+    MultiFab* ax_use = (l_moving_proj) ? &ax_proj : ax[lev].get();
+    MultiFab* ay_use = (l_moving_proj) ? &ay_proj : ay[lev].get();
+    MultiFab* az_use = (l_moving_proj) ? &az_proj : az[lev].get();
+
+    MultiFab r_hse((l_moving_proj) ? base_state_new[lev] : base_state[lev],
+                   make_alias, BaseState::r0_comp, 1);
 
     Vector<MultiFab> rhs;
     Vector<MultiFab> phi;
@@ -194,22 +235,35 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
             const Array4<Real const>& rho0v_arr = mom_mf[IntVars::ymom].const_array(mfi);
             const Array4<Real      >& rho0w_arr = mom_mf[IntVars::zmom].array(mfi);
 
-            const Array4<Real const>&     z_nd = z_phys_nd[lev]->const_array(mfi);
+            const Array4<Real const>&     z_nd = zpn_proj->const_array(mfi);
             const Array4<Real const>&     mf_u =  mapfac[lev][MapFacType::u_x]->const_array(mfi);
             const Array4<Real const>&     mf_v =  mapfac[lev][MapFacType::v_y]->const_array(mfi);
 
+            const Array4<Real const>& r0_arr  = r_hse.const_array(mfi);
+            const Array4<Real const>& z_t_arr = (l_moving_proj) ? z_t_rk[lev]->const_array(mfi)
+                                                                : Array4<Real const>{};
+
             //
             // Define Omega from (rho0 W) but store it in the same array
+            // On the moving mesh the projected flux is the flux RELATIVE to the grid,
+            // Omega - rho0 * z_t; the bottom face of that relative flux is exactly zero
+            // (the mesh follows the material wall), which is the k == 0 setting below.
             //
+            const bool l_move = l_moving_proj;
             Box tbz = mfi.nodaltilebox(2);
             ParallelFor(tbz, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
                 if (k == 0) {
                     rho0w_arr(i,j,k) = zero;
                 } else {
                     Real rho0w = rho0w_arr(i,j,k);
-                    rho0w_arr(i,j,k) = OmegaFromW(i,j,k,rho0w,
-                                                  rho0u_arr,rho0v_arr,
-                                                  mf_u,mf_v,z_nd,dxInv);
+                    Real omega = OmegaFromW(i,j,k,rho0w,
+                                            rho0u_arr,rho0v_arr,
+                                            mf_u,mf_v,z_nd,dxInv);
+                    if (l_move) {
+                        Real r0_face = myhalf * (r0_arr(i,j,k) + r0_arr(i,j,k-1));
+                        omega -= r0_face * z_t_arr(i,j,k);
+                    }
+                    rho0w_arr(i,j,k) = omega;
                 }
             });
         } // mfi
@@ -236,8 +290,35 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
     phi_lev.setVal(0.0);
 
     // ****************************************************************************
-    // Break into subdomains
+    // Mesh-motion source for the moving-mesh anelastic constraint:
+    //     (J^new r0^new - J^old r0^old) / (dt J^new)
+    // added to the divergence so the projected field satisfies
+    //     d(J rho0)/dt + div(rho0 U_rel) = 0
+    // in the same discrete form the base-state transport update uses
+    // (ERF_TI_slow_rhs_pre.H). It operates on the level-wide rhs, whose FABs the
+    // single solve region aliases (multiple regions are refused above).
     // ****************************************************************************
+    auto add_mesh_motion_source = [&] (MultiFab& rhs_mf)
+    {
+        if (!l_moving_proj) { return; }
+        MultiFab r0_old(base_state[lev],     make_alias, BaseState::r0_comp, 1);
+        MultiFab r0_new(base_state_new[lev], make_alias, BaseState::r0_comp, 1);
+        Real inv_dt = one / l_dt;
+        for (MFIter mfi(rhs_mf,TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+            const Array4<Real      >& rhs_arr = rhs_mf.array(mfi);
+            const Array4<Real const>& r0o_arr = r0_old.const_array(mfi);
+            const Array4<Real const>& r0n_arr = r0_new.const_array(mfi);
+            const Array4<Real const>& dJo_arr = detJ_cc[lev]->const_array(mfi);
+            const Array4<Real const>& dJn_arr = detJ_cc_new[lev]->const_array(mfi);
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                rhs_arr(i,j,k) += (dJn_arr(i,j,k) * r0n_arr(i,j,k) -
+                                   dJo_arr(i,j,k) * r0o_arr(i,j,k)) * inv_dt / dJn_arr(i,j,k);
+            });
+        }
+    };
 
     std::map<int,int> index_map;
 
@@ -385,11 +466,11 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
 
             for (MFIter mfi(rhs_sub[0]); mfi.isValid(); ++mfi) {
                 int orig_index = index_map[mfi.index()];
-                ax_sub.setFab(mfi, FArrayBox((*ax[lev])[orig_index], amrex::make_alias, 0, 1));
-                ay_sub.setFab(mfi, FArrayBox((*ay[lev])[orig_index], amrex::make_alias, 0, 1));
-                az_sub.setFab(mfi, FArrayBox((*az[lev])[orig_index], amrex::make_alias, 0, 1));
-                znd_sub.setFab(mfi, FArrayBox((*z_phys_nd[lev])[orig_index], amrex::make_alias, 0, 1));
-                dJ_sub.setFab(mfi, FArrayBox((*detJ_cc[lev])[orig_index], amrex::make_alias, 0, 1));
+                ax_sub.setFab(mfi, FArrayBox((*ax_use)[orig_index], amrex::make_alias, 0, 1));
+                ay_sub.setFab(mfi, FArrayBox((*ay_use)[orig_index], amrex::make_alias, 0, 1));
+                az_sub.setFab(mfi, FArrayBox((*az_use)[orig_index], amrex::make_alias, 0, 1));
+                znd_sub.setFab(mfi, FArrayBox((*zpn_proj)[orig_index], amrex::make_alias, 0, 1));
+                dJ_sub.setFab(mfi, FArrayBox((*dJ_proj)[orig_index], amrex::make_alias, 0, 1));
             }
         }
 
@@ -405,7 +486,14 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
         // Note that we replace "rho0w" with the contravariant momentum, Omega
         // ****************************************************************************
 
-        compute_divergence(lev, rhs_sub[0], rho0_u_const, geom_tmp[0]);
+        compute_divergence(lev, rhs_sub[0], rho0_u_const, geom_tmp[0],
+                           (l_moving_proj) ? &ax_proj : nullptr,
+                           (l_moving_proj) ? &ay_proj : nullptr,
+                           (l_moving_proj) ? dJ_proj  : nullptr);
+
+        // The moving-mesh anelastic constraint carries the d(J rho0)/dt source
+        // (writes through the aliased level-wide rhs; no-op when not moving)
+        add_mesh_motion_source(rhs_lev);
 
         Real rhsnorm;
 
@@ -750,10 +838,17 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
         rho0_u_const[1] = &mom_mf[IntVars::ymom];
         rho0_u_const[2] = &mom_mf[IntVars::zmom];
 
-        compute_divergence(lev, rhs_lev, rho0_u_const, geom_tmp[0]);
+        compute_divergence(lev, rhs_lev, rho0_u_const, geom_tmp[0],
+                           (l_moving_proj) ? &ax_proj : nullptr,
+                           (l_moving_proj) ? &ay_proj : nullptr,
+                           (l_moving_proj) ? dJ_proj  : nullptr);
+
+        // Include the mesh-motion source so the printed norm is the residual of the full
+        // moving-mesh constraint, not of the static-mesh divergence alone
+        add_mesh_motion_source(rhs_lev);
 
         bool local = false;
-        Real sum = volWgtSumMF(lev,rhs_lev,0,*detJ_cc[lev],*mapfac[lev][MapFacType::m_x],*mapfac[lev][MapFacType::m_y],false,local);
+        Real sum = volWgtSumMF(lev,rhs_lev,0,*dJ_proj,*mapfac[lev][MapFacType::m_x],*mapfac[lev][MapFacType::m_y],false,local);
 
         if (mg_verbose > 0) {
             Print() << "Max/L2 norm of divergence after  solve at level " << lev << " : " << rhs_lev.norm0() << " " <<
@@ -790,11 +885,26 @@ void ERF::project_momenta (int lev, Real l_time, Real l_dt, Vector<MultiFab>& mo
              const Array4<Real      >& rho0u_arr = mom_mf[IntVars::xmom].array(mfi);
              const Array4<Real      >& rho0v_arr = mom_mf[IntVars::ymom].array(mfi);
              const Array4<Real      >& rho0w_arr = mom_mf[IntVars::zmom].array(mfi);
-             const Array4<Real const>&      z_nd = z_phys_nd[lev]->const_array(mfi);
+             const Array4<Real const>&      z_nd = zpn_proj->const_array(mfi);
              const Array4<Real const>&      mf_u =  mapfac[lev][MapFacType::u_x]->const_array(mfi);
              const Array4<Real const>&      mf_v =  mapfac[lev][MapFacType::v_y]->const_array(mfi);
+
+             const Array4<Real const>& r0_arr  = r_hse.const_array(mfi);
+             const Array4<Real const>& z_t_arr = (l_moving_proj) ? z_t_rk[lev]->const_array(mfi)
+                                                                 : Array4<Real const>{};
+
+             // On the moving mesh restore the grid-motion part before converting back:
+             // at k == 0 this adds rho0 * z_t to the (zero) relative flux, which
+             // reproduces exactly the moving-wall vertical momentum the stage update
+             // imposed (WFromOmega of rho * z_t in ERF_TI_no_substep_fun.H).
+             const bool l_move = l_moving_proj;
              ParallelFor(tbz, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
                  Real omega = rho0w_arr(i,j,k);
+                 if (l_move) {
+                     Real r0_face = (k == 0) ? r0_arr(i,j,k)
+                                             : myhalf * (r0_arr(i,j,k) + r0_arr(i,j,k-1));
+                     omega += r0_face * z_t_arr(i,j,k);
+                 }
                  rho0w_arr(i,j,k) = WFromOmega(i,j,k,omega,
                                                rho0u_arr,rho0v_arr,
                                                mf_u,mf_v,z_nd,dxInv);
