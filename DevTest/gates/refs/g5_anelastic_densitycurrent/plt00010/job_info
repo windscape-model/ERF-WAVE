@@ -1,0 +1,140 @@
+===============================================================================
+ ERF Job Information
+===============================================================================
+inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/DevTest/gates/g5_anelastic_densitycurrent/inputs
+
+number of MPI processes: 4
+
+CPU time used since start of simulation (CPU-hours): 9.04756e-05
+
+===============================================================================
+ Plotfile Information
+===============================================================================
+output data / time: Tue Sep  1 01:30:25 2026
+output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/DevTest/gates/_work/g5_anelastic_densitycurrent
+
+
+===============================================================================
+ Build Information
+===============================================================================
+build date:    2026-08-09 06:50:46.804758
+build machine: Darwin ml-5561504 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:25:34 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6020 arm64
+build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/Exec
+AMReX dir:     ..//Submodules/AMReX
+
+COMP:          llvm
+COMP version:  Apple clang version 21.0.0 (clang-2100.1.1.101)
+
+
+ERF       git hash: midpoint-o2-manuscript-2026-07-24-84-gb7725d70-dirty
+AMReX       git hash: 750b74d
+
+
+===============================================================================
+ Grid Information
+===============================================================================
+ level: 0
+   number of boxes = 4
+   maximum zones   = 256 1 64 
+
+ Boundary conditions
+   -x: Symmetry
+   +x: Outflow
+   -y: Periodic
+   +y: Periodic
+   -z: SlipWall
+   +z: SlipWall
+
+
+===============================================================================
+ Inputs File Parameters
+===============================================================================
+DistributionMapping.verbose = 0
+amr.blocking_factor = 1
+amr.check_input = true
+amr.grid_eff = 0.69999999999999996
+amr.max_grid_iterations = 4
+amr.max_grid_size = 2048
+amr.max_level = 0
+amr.n_cell = 256 1 64
+amr.n_error_buf = 0
+amr.n_proper = 2
+amr.refine_grid_layout = true
+amr.refine_grid_layout_x = 1
+amr.refine_grid_layout_y = 1
+amr.refine_grid_layout_z = 0
+amr.v = 0
+amrex.abort_on_out_of_gpu_memory = false
+amrex.abort_on_unused_inputs = false
+amrex.async_out = false
+amrex.async_out_nfiles = 64
+amrex.fpe_trap_invalid = 1
+amrex.fpe_trap_overflow = false
+amrex.fpe_trap_zero = false
+amrex.handle_sigabrt = true
+amrex.handle_sigfpe = true
+amrex.handle_sigill = true
+amrex.handle_sigint = true
+amrex.handle_sigsegv = true
+amrex.handle_sigterm = false
+amrex.init_snan = true
+amrex.mf.alloc_single_chunk = false
+amrex.signal_handling = true
+amrex.the_arena_defragmentation = true
+amrex.the_arena_init_size = 8388608
+amrex.the_arena_is_managed = false
+amrex.the_arena_release_threshold = 9223372036854775807
+amrex.the_comms_arena_defragmentation = true
+amrex.the_comms_arena_init_size = 8388608
+amrex.the_comms_arena_release_threshold = 9223372036854775807
+amrex.the_device_arena_defragmentation = true
+amrex.the_device_arena_init_size = 8388608
+amrex.the_device_arena_release_threshold = 9223372036854775807
+amrex.the_managed_arena_defragmentation = true
+amrex.the_managed_arena_init_size = 8388608
+amrex.the_managed_arena_release_threshold = 9223372036854775807
+amrex.the_pinned_arena_defragmentation = true
+amrex.the_pinned_arena_init_size = 8388608
+amrex.the_pinned_arena_release_threshold = 9223372036854775807
+amrex.throw_exception = false
+amrex.use_gpu_aware_mpi = false
+amrex.vector_growth_factor = 1.5
+amrex.verbose = 1
+eb2.extend_domain_face = true
+eb2.max_grid_size = 64
+eb2.num_coarsen_opt = 0
+erf.alpha_T = 75.0
+erf.anelastic = 1
+erf.buoyancy_type = 2
+erf.c_p = 1004.0
+erf.check_file = chk
+erf.check_int = -1000
+erf.dynamic_viscosity = 75.0
+erf.fixed_dt = 1.0
+erf.fixed_fast_dt = 0.25
+erf.init_type = Isentropic
+erf.les_type = None
+erf.molec_diff_type = ConstantAlpha
+erf.plot_file_1 = plt
+erf.plot_int_1 = 10
+erf.plot_vars_1 = density x_velocity y_velocity z_velocity pressure theta pres_hse dens_hse pert_pres pert_dens
+erf.plotfile_type = amrex
+erf.poisson_abstol = 1.e-10
+erf.poisson_reltol = 1.e-10
+erf.prob_name = "Density Current"
+erf.sum_interval = -1
+erf.terrain_type = None
+erf.use_gravity = true
+erf.v = 0
+fabarray.comm_tile_size = 1024000 1024000 1024000
+fabarray.mfiter_tile_size = 1024 1024 1024
+geometry.coord_sys = 0
+geometry.is_periodic = 0 1 0
+geometry.prob_hi = 25600. 100. 6400.
+geometry.prob_lo = 0. 0. 0.
+max_step = 10
+prob.T_0 = 300.0
+xhi.type = Outflow
+xlo.type = Symmetry
+zhi.type = SlipWall
+zlo.type = SlipWall

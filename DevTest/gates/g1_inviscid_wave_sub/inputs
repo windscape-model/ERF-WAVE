@@ -1,0 +1,40 @@
+# GATE g1: inviscid moving wave, implicit acoustic substepping, midpoint metrics (paper default).
+# Derived from verification_runs/tab_rich/rich_dt0.002 (the JCP reflection-free wave), cut to 100 steps.
+# Protects: moving-mesh metrics, GCL flux sampling, WS-RK3 + implicit substep, HSE base state.
+erf.prob_name = "Moving Terrain"
+erf.init_type = Isentropic
+stop_time = 1.0
+max_step  = 100
+amrex.fpe_trap_invalid = 1
+fabarray.mfiter_tile_size = 1024 1024 1024
+geometry.prob_extent = 100.  10.  100.
+amr.n_cell           =  40    4   50
+geometry.is_periodic = 1 1 0
+zlo.type = "SlipWall"
+zhi.type = "SlipWall"
+erf.terrain_type = MovingFittedMesh
+erf.terrain_smoothing = 2
+erf.substepping_type    = Implicit
+erf.fixed_mri_dt_ratio  = 4
+erf.use_lagged_delta_rt = false
+erf.beta_s              = 0.1
+erf.fixed_dt           = 0.002
+erf.sum_interval = -1
+erf.v = 0
+amr.v = 0
+amr.max_level = 0
+erf.check_int   = -1
+erf.plot_file_1 = plt
+erf.plot_int_1  = 100
+erf.plot_vars_1 = density x_velocity y_velocity z_velocity pressure theta pres_hse dens_hse pert_pres pert_dens detJ
+erf.use_gravity = true
+erf.dycore_horiz_adv_type  = Centered_2nd
+erf.dycore_vert_adv_type   = Centered_2nd
+erf.dryscal_horiz_adv_type = Centered_2nd
+erf.dryscal_vert_adv_type  = Centered_2nd
+erf.molec_diff_type = "None"
+erf.les_type        = "None"
+prob.custom_terrain_type = "MovingSineWave"
+prob.wavelength = 100.0
+prob.Ampl = 0.16
+prob.T_0  = 300.

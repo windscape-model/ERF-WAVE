@@ -1,0 +1,54 @@
+# GATE g3: viscous Stokes layer over the moving wave, orbital no-slip wall (TERRAIN_VELOCITY build).
+# Derived from Exec/visc_test/inputs (the JCP viscous verification), cut to 250 steps (t=0.5).
+# Protects: TV orbital wall BC, constant molecular viscosity, FastImplicit Rayleigh sponge,
+# the deprecated erf.substep_time_order=1 alias path, explicit vertical diffusion.
+erf.prob_name = "Moving Terrain"
+erf.init_type = Isentropic
+stop_time = 1.0
+max_step  = 250
+amrex.fpe_trap_invalid = 1
+fabarray.mfiter_tile_size = 1024 1024 1024
+geometry.prob_extent = 56.2 10.  100.
+amr.n_cell           =  50    4   81
+geometry.is_periodic = 1 1 0
+zlo.type = "NoSlipWall"
+zhi.type = "SlipWall"
+erf.terrain_type = Moving
+erf.terrain_smoothing = 2
+erf.substepping_type    = Implicit
+erf.fixed_mri_dt_ratio  = 4
+erf.use_lagged_delta_rt = false
+erf.beta_s              = 0.1
+erf.fixed_dt           = 0.002
+erf.sum_interval = -1
+erf.v = 0
+amr.v = 0
+amr.max_level = 0
+erf.check_int   = -1
+erf.plot_file_1 = plt
+erf.plot_int_1  = 250
+erf.plot_vars_1 = density x_velocity y_velocity z_velocity pressure theta pres_hse dens_hse pert_pres pert_dens detJ
+erf.use_gravity = true
+erf.dycore_horiz_adv_type  = Centered_2nd
+erf.dycore_vert_adv_type   = Centered_2nd
+erf.dryscal_horiz_adv_type = Centered_2nd
+erf.dryscal_vert_adv_type  = Centered_2nd
+erf.molec_diff_type = "Constant"
+erf.dynamic_viscosity = 0.8379
+erf.rho0_trans = 1.0
+erf.alpha_T = 0.0
+erf.grid_stretching_ratio = 1.05
+erf.initial_dz = 0.1
+erf.les_type        = "None"
+prob.custom_terrain_type = "MovingSineWave"
+prob.wavelength = 56.2
+prob.Ampl = 0.08
+prob.T_0  = 300.
+erf.substep_time_order = 1
+
+erf.rayleigh_damping_type = FastImplicit
+erf.rayleigh_damp_W = 1
+erf.rayleigh_dampcoef = 200
+erf.rayleigh_zdamp = 40.0
+
+erf.vert_implicit = 0

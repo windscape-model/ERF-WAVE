@@ -1,0 +1,8 @@
+# Scratch run areas and build logs; references under gates/refs/ stay tracked.
+gates/_work/
+gates/_build_*.log
+**/plt[0-9]*/
+**/chk[0-9]*/
+**/Backtrace.*
+**/*.log
+!gates/refs/**

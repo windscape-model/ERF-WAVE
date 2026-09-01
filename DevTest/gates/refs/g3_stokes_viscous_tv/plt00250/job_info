@@ -1,0 +1,152 @@
+===============================================================================
+ ERF Job Information
+===============================================================================
+inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/DevTest/gates/g3_stokes_viscous_tv/inputs
+
+number of MPI processes: 4
+
+CPU time used since start of simulation (CPU-hours): 0.00435682
+
+===============================================================================
+ Plotfile Information
+===============================================================================
+output data / time: Tue Sep  1 01:30:24 2026
+output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/DevTest/gates/_work/g3_stokes_viscous_tv
+
+
+===============================================================================
+ Build Information
+===============================================================================
+build date:    2026-08-09 06:50:46.804758
+build machine: Darwin ml-5561504 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:25:34 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6020 arm64
+build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/Exec
+AMReX dir:     ..//Submodules/AMReX
+
+COMP:          llvm
+COMP version:  Apple clang version 21.0.0 (clang-2100.1.1.101)
+
+
+ERF       git hash: midpoint-o2-manuscript-2026-07-24-84-gb7725d70-dirty
+AMReX       git hash: 750b74d
+
+
+===============================================================================
+ Grid Information
+===============================================================================
+ level: 0
+   number of boxes = 4
+   maximum zones   = 50 4 81 
+
+ Boundary conditions
+   -x: Periodic
+   +x: Periodic
+   -y: Periodic
+   +y: Periodic
+   -z: NoSlipWall
+   +z: SlipWall
+
+
+===============================================================================
+ Inputs File Parameters
+===============================================================================
+DistributionMapping.verbose = 0
+amr.blocking_factor = 1
+amr.check_input = true
+amr.grid_eff = 0.69999999999999996
+amr.max_grid_iterations = 4
+amr.max_grid_size = 2048
+amr.max_level = 0
+amr.n_cell = 50 4 81
+amr.n_error_buf = 0
+amr.n_proper = 2
+amr.refine_grid_layout = true
+amr.refine_grid_layout_x = 1
+amr.refine_grid_layout_y = 1
+amr.refine_grid_layout_z = 0
+amr.v = 0
+amrex.abort_on_out_of_gpu_memory = false
+amrex.abort_on_unused_inputs = false
+amrex.async_out = false
+amrex.async_out_nfiles = 64
+amrex.fpe_trap_invalid = 1
+amrex.fpe_trap_overflow = false
+amrex.fpe_trap_zero = false
+amrex.handle_sigabrt = true
+amrex.handle_sigfpe = true
+amrex.handle_sigill = true
+amrex.handle_sigint = true
+amrex.handle_sigsegv = true
+amrex.handle_sigterm = false
+amrex.init_snan = true
+amrex.mf.alloc_single_chunk = false
+amrex.signal_handling = true
+amrex.the_arena_defragmentation = true
+amrex.the_arena_init_size = 8388608
+amrex.the_arena_is_managed = false
+amrex.the_arena_release_threshold = 9223372036854775807
+amrex.the_comms_arena_defragmentation = true
+amrex.the_comms_arena_init_size = 8388608
+amrex.the_comms_arena_release_threshold = 9223372036854775807
+amrex.the_device_arena_defragmentation = true
+amrex.the_device_arena_init_size = 8388608
+amrex.the_device_arena_release_threshold = 9223372036854775807
+amrex.the_managed_arena_defragmentation = true
+amrex.the_managed_arena_init_size = 8388608
+amrex.the_managed_arena_release_threshold = 9223372036854775807
+amrex.the_pinned_arena_defragmentation = true
+amrex.the_pinned_arena_init_size = 8388608
+amrex.the_pinned_arena_release_threshold = 9223372036854775807
+amrex.throw_exception = false
+amrex.use_gpu_aware_mpi = false
+amrex.vector_growth_factor = 1.5
+amrex.verbose = 1
+eb2.extend_domain_face = true
+eb2.max_grid_size = 64
+eb2.num_coarsen_opt = 0
+erf.alpha_T = 0.0
+erf.beta_s = 0.1
+erf.check_int = -1
+erf.dryscal_horiz_adv_type = Centered_2nd
+erf.dryscal_vert_adv_type = Centered_2nd
+erf.dycore_horiz_adv_type = Centered_2nd
+erf.dycore_vert_adv_type = Centered_2nd
+erf.dynamic_viscosity = 0.8379
+erf.fixed_dt = 0.002
+erf.fixed_mri_dt_ratio = 4
+erf.grid_stretching_ratio = 1.05
+erf.init_type = Isentropic
+erf.initial_dz = 0.1
+erf.les_type = "None"
+erf.molec_diff_type = "Constant"
+erf.plot_file_1 = plt
+erf.plot_int_1 = 250
+erf.plot_vars_1 = density x_velocity y_velocity z_velocity pressure theta pres_hse dens_hse pert_pres pert_dens detJ
+erf.prob_name = "Moving Terrain"
+erf.rayleigh_damp_W = 1
+erf.rayleigh_dampcoef = 200
+erf.rayleigh_damping_type = FastImplicit
+erf.rayleigh_zdamp = 40.0
+erf.rho0_trans = 1.0
+erf.substep_time_order = 1
+erf.substepping_type = Implicit
+erf.sum_interval = -1
+erf.terrain_smoothing = 2
+erf.terrain_type = Moving
+erf.use_gravity = true
+erf.use_lagged_delta_rt = false
+erf.v = 0
+erf.vert_implicit = 0
+fabarray.comm_tile_size = 1024000 1024000 1024000
+fabarray.mfiter_tile_size = 1024 1024 1024
+geometry.coord_sys = 0
+geometry.is_periodic = 1 1 0
+geometry.prob_extent = 56.2 10. 100.
+geometry.prob_lo = 0.0 0.0 0.0
+max_step = 250
+prob.Ampl = 0.08
+prob.T_0 = 300.
+prob.custom_terrain_type = "MovingSineWave"
+prob.wavelength = 56.2
+stop_time = 1.0
+zhi.type = "SlipWall"
+zlo.type = "NoSlipWall"
