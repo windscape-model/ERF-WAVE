@@ -339,6 +339,29 @@
             MultiFab* pi0_new = &pi_hse_new;
             MultiFab* th0_new = &th_hse_new;
 
+            if (solverChoice.moving_base_state_rebuild) {
+                // Rebuild the base state on the stage-target geometry from the initial hydrostatic
+                // profile, exactly as at initialization: r_0 from the problem's hydrostatic density
+                // at the new heights, then the discrete hydrostatic integration of p_0, pi_0 and
+                // theta_0. The incremental evolution in the else-branch re-creates p_0 from
+                // (rho theta)_0 through the equation of state at every step; that pow() round trip
+                // accumulates one-sided round-off (about 5e-11 Pa per step, uniform in the column,
+                // present even with the mesh at rest), which enters the perturbation pressure
+                // p - p_0 one to one and floors fine-step comparisons of p'. The rebuilt base state
+                // also keeps dp_0/dz = -rho_0 g. Restricted to the custom (isentropic) base state,
+                // because a sounding-based base state is not re-derivable from prob->erf_init_dens_hse.
+                AMREX_ALWAYS_ASSERT_WITH_MESSAGE(solverChoice.init_type == InitType::None ||
+                                                 solverChoice.init_type == InitType::Isentropic,
+                    "erf.moving_base_state_rebuild requires the custom isentropic base state (init_type none or Isentropic)");
+                MultiFab qv_hse_new(base_state_new[level], make_alias, BaseState::qv0_comp, 1);
+                std::unique_ptr<MultiFab> z_cc_new = std::make_unique<MultiFab>(
+                    z_phys_cc[level]->boxArray(), z_phys_cc[level]->DistributionMap(),
+                    1, z_phys_cc[level]->nGrow());
+                make_zcc(fine_geom, *z_phys_nd_new[level], *z_cc_new);
+                prob->erf_init_dens_hse(r_hse_new, z_phys_nd_new[level], z_cc_new, fine_geom);
+                erf_enforce_hse(level, r_hse_new, p_hse_new, pi_hse_new, th_hse_new, qv_hse_new, z_cc_new);
+            } else {
+
             // We define and evolve (rho theta)_0 in order to re-create p_0 in a way that is consistent
             //    with our update of (rho theta) but does NOT maintain dp_0 / dz = -rho_0 g.  This is why
             //    we no longer discretize the vertical pressure gradient in perturbational form.
@@ -428,6 +451,7 @@
                    th0_new_arr(i,j,k) = rt0_tmp_new / r0_new_arr(i,j,k);
                });
             } // MFIter
+            } // evolved base state
             base_state_new[level].FillBoundary(fine_geom.periodicity());
 
             // Ghost cells of the updated base state on the new mesh, as at a restart

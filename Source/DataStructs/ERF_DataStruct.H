@@ -497,6 +497,7 @@ struct SolverChoice {
         }
 
         pp.query("force_stage1_single_substep", force_stage1_single_substep);
+        pp.query("moving_base_state_rebuild", moving_base_state_rebuild);
 
         // Include Coriolis forcing?
         pp.query("use_coriolis", use_coriolis);
@@ -1179,6 +1180,7 @@ struct SolverChoice {
     EBChoice      ebChoice;
 
     int         force_stage1_single_substep = 1;
+    int         moving_base_state_rebuild  = 0;   // 1: rebuild the moving-mesh base state from the initial profile each stage (no incremental round-off drift)
 
     amrex::Vector<SubsteppingType> substepping_type;
     amrex::Vector<int> anelastic;
