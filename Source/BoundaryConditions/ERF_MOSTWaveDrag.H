@@ -11,8 +11,8 @@
 
 /**
  * Wave drag: the logarithmic law applied at each point to the wind relative to the orbital
- * velocity of the moving surface h = a R(t) sin(kx - omega t) (Zhu et al. 2023, Mon. Wea. Rev.
- * 151, Eqs. 26-29):
+ * velocity u_w = a R omega sin(kx - omega t), w_w = -a R omega cos(kx - omega t) of the moving
+ * surface h = a R(t) sin(kx - omega t) (Zhu et al. 2023, Mon. Wea. Rev. 151, Eqs. 26-29):
  *
  *   u_r = u - u_w,  v_r = v,  w_r = w - w_w                   relative velocity
  *   u_par = (u_r + w_r dh/dx) / sqrt((dh/dx)^2 + 1)           tangent to the surface (v_par alike)
@@ -23,21 +23,9 @@
  * flux -rho u_* theta_* follow from the Monin-Obukhov relations at each point along the wave
  * (Sullivan et al. 2014, J. Atmos. Sci. 71, appendix), with the stability functions of
  * Large et al. (1994). The stresses are at the faces of u and v, with the sign of compute_u_flux.
+ * During the ramp, w_w omits the part a R'(t) sin(kx - omega t) of dh/dt.
  */
 namespace WaveDrag {
-
-    // Orbital velocity (u_w, w_w) and slope dh/dx of the surface at x. During the ramp, w_w
-    // omits the part a R'(t) sin(kx - omega t) of dh/dt.
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE
-    void surface_motion (const MovingWave& wave, const amrex::Real x, const amrex::Real time,
-                         amrex::Real& u_w, amrex::Real& w_w, amrex::Real& dhdx)
-    {
-        const amrex::Real r  = wave.ramp(time);
-        const amrex::Real ph = wave.k * x - wave.omega * time;
-        u_w  =  wave.a * r * wave.omega * std::sin(ph);
-        w_w  = -wave.a * r * wave.omega * std::cos(ph);
-        dhdx =  wave.a * r * wave.k     * std::cos(ph);
-    }
 
     struct StabParams {
         int         mode;     // 0: kinematic surface heat flux Q, 1: surface temperature theta_s
@@ -116,8 +104,11 @@ namespace WaveDrag {
                          const MovingWave& wave, amrex::Real Cd,
                          const bool stab, const StabParams& sp)
     {
-        amrex::Real u_w, w_w, dhdx;
-        surface_motion(wave, xu, time, u_w, w_w, dhdx);
+        const amrex::Real r    = wave.ramp(time);
+        const amrex::Real ph   = wave.k * xu - wave.omega * time;
+        const amrex::Real u_w  =  wave.a * r * wave.omega * std::sin(ph);
+        const amrex::Real w_w  = -wave.a * r * wave.omega * std::cos(ph);
+        const amrex::Real dhdx =  wave.a * r * wave.k     * std::cos(ph);
 
         const amrex::Real uloc = velx_arr(i,j,k);
         const amrex::Real vloc = amrex::Real(0.25) * ( vely_arr(i  ,j,k) + vely_arr(i  ,j+1,k)
@@ -153,8 +144,10 @@ namespace WaveDrag {
                          const MovingWave& wave, amrex::Real Cd,
                          const bool stab, const StabParams& sp)
     {
-        amrex::Real u_w, w_w, dhdx;
-        surface_motion(wave, xv, time, u_w, w_w, dhdx);
+        const amrex::Real r    = wave.ramp(time);
+        const amrex::Real ph   = wave.k * xv - wave.omega * time;
+        const amrex::Real u_w  =  wave.a * r * wave.omega * std::sin(ph);
+        const amrex::Real w_w  = -wave.a * r * wave.omega * std::cos(ph);
         const amrex::Real dhdy = amrex::Real(0.0);
 
         const amrex::Real vloc = vely_arr(i,j,k);
@@ -191,8 +184,10 @@ namespace WaveDrag {
                          const amrex::Real& xc, const amrex::Real& time,
                          const MovingWave& wave, const StabParams& sp)
     {
-        amrex::Real u_w, w_w, dhdx;
-        surface_motion(wave, xc, time, u_w, w_w, dhdx);
+        const amrex::Real r    = wave.ramp(time);
+        const amrex::Real ph   = wave.k * xc - wave.omega * time;
+        const amrex::Real u_w  =  wave.a * r * wave.omega * std::sin(ph);
+        const amrex::Real w_w  = -wave.a * r * wave.omega * std::cos(ph);
 
         const amrex::Real uloc = amrex::Real(0.5) * ( velx_arr(i,j,k) + velx_arr(i+1,j,k) );
         const amrex::Real vloc = amrex::Real(0.5) * ( vely_arr(i,j,k) + vely_arr(i,j+1,k) );
