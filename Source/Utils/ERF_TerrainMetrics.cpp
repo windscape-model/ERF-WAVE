@@ -156,12 +156,7 @@ make_terrain_fitted_coords (int lev, const Geometry& geom, MultiFab& z_phys_nd,
             });
         }
 
-        // Below-bottom ghost planes (k < domlo_z): FillBoundary cannot reach them (there
-        // is no valid source plane below the domain), and the smoothing-specific builders
-        // in init_which_terrain_grid fill them from laterally CLIPPED columns, leaving
-        // O(terrain-amplitude) errors in lateral-ghost columns at domain edges under
-        // periodicity (audit 2026-07-05 D4-4). Recompute them here by downward linear
-        // extrapolation from the now-periodic bottom planes, for every terrain path.
+        // Ghost planes below the bottom, by linear extrapolation from the two lowest planes
         if (nd_bx.smallEnd(2) <= domlo_z) {
             Box bx_zlo = mfi.growntilebox(ngrow);
             bx_zlo.setBig(2,domlo_z-1);

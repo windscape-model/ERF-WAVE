@@ -389,9 +389,7 @@ void erf_make_tau_terms (int level, int nrk,
 
                 // First create Omega using velocity (not momentum)
                 Array4<Real> omega_arr = Omega.array();
-                // D10 (2026-09-24): OmegaFromW = w - u z_x - v z_y has no grid velocity. On a MOVING surface its
-                // value at k = 0 is z_t (the surface vertical velocity), not zero, and the interior faces carry the
-                // same definition. Zero at k = 0 would add z_t/dz to the expansion rate of the first cell.
+                // On a moving surface, OmegaFromW at k = 0 is the surface velocity z_t, not zero
                 const bool l_moving_surface = (solverChoice.terrain_type == TerrainType::MovingFittedMesh);
                 ParallelFor(gbxo, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
                 {
