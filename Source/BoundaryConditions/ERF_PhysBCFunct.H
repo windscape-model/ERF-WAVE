@@ -18,6 +18,7 @@
 #include <ERF_IndexDefines.H>
 #include <ERF_DataStruct.H>
 #include <ERF_EddyViscosity.H>
+#include <ERF_MovingWave.H>
 #include <ERF_TerrainMetrics.H>
 
 class ERFPhysBCFunct_cons
@@ -101,7 +102,11 @@ public:
           m_z_phys_nd(z_phys_nd.get()),
           m_use_real_bcs(use_real_bcs),
           m_u_bc_data(u_bc_data)
-    { }
+    {
+#ifdef ERF_USE_TERRAIN_VELOCITY
+        m_wave = MovingWave::from_inputs();
+#endif
+    }
 
     ~ERFPhysBCFunct_u () {}
 
@@ -139,6 +144,9 @@ private:
     amrex::MultiFab* m_z_phys_nd;
     bool             m_use_real_bcs;
     amrex::Real*     m_u_bc_data;
+#ifdef ERF_USE_TERRAIN_VELOCITY
+    MovingWave       m_wave;     // the orbital velocity of the no-slip lower wall follows this wave
+#endif
 };
 
 class ERFPhysBCFunct_v

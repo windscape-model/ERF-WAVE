@@ -41,6 +41,9 @@ endif
 ifeq ($(USE_RADIATION), TRUE)
   USERSuffix := $(USERSuffix).RAD
 endif
+ifeq ($(USE_TERRAIN_VELOCITY), TRUE)
+  USERSuffix := $(USERSuffix).TV
+endif
 
 ERF_SOURCE_DIR = $(ERF_HOME)/Source
 include $(ERF_SOURCE_DIR)/Make.package
