@@ -180,13 +180,8 @@
             FArrayBox terrain_fab_src(makeSlab(terrain_bx,2,0),1);
             FArrayBox terrain_fab_new(makeSlab(terrain_bx,2,0),1);
 
-            // The "src" geometry is the mesh on which the slow tendency is evaluated, so it
-            // multiplies the full fields rather than an acoustic perturbation.  Refreshing it at
-            // the stage input re-centers it with the staging; holding it at the model-step start
-            // is the cadence of the WRF moving-bottom implementation, whose hydrostatic variables
-            // are rebalanced once per model time step.
-            const Real src_time = (solverChoice.moving_geometry_update == MovingGeometryUpdate::PerStep ||
-                                   solverChoice.slow_geometry_time == SlowGeometryTime::StepStart)
+            // Mesh of the slow tendency: the mesh at the stage time, or at the step start (erf.slow_geometry_time)
+            const Real src_time = (solverChoice.slow_geometry_time == SlowGeometryTime::StepStart)
                                 ? old_step_time : old_stage_time;
 
             prob->init_terrain_surface(fine_geom,terrain_fab_old,old_step_time);

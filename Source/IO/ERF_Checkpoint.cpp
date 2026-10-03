@@ -699,36 +699,8 @@ ERF::ReadCheckpointFile ()
            Real dzmin = get_dzmin_terrain(*z_phys_nd[lev]);
            micro->Set_dzmin(lev, dzmin);
 
-           if (SolverChoice::mesh_type == MeshType::VariableDz) {
-               MultiFab z_slab(convert(ba2d[lev],IntVect(1,1,1)),dmap[lev],1,0);
-               int klo = geom[lev].Domain().smallEnd(2);
-               for (MFIter mfi(z_slab); mfi.isValid(); ++mfi) {
-                   Box nbx = mfi.tilebox();
-                   Array4<Real const> const& z_arr      = z_phys_nd[lev]->const_array(mfi);
-                   Array4<Real      > const& z_slab_arr = z_slab.array(mfi);
-                   ParallelFor(nbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-                   {
-                       z_slab_arr(i,j,k) = z_arr(i,j,klo);
-                   });
-               }
-               Real z_min = z_slab.min(0);
-               Real z_max = z_slab.max(0);
-
-               auto dz = geom[lev].CellSize()[2];
-               if (z_max - z_min < Real(1.e-8) * dz) {
-                   // The mesh type was set from the terrain type when the inputs were read,
-                   // and the run that wrote this checkpoint advanced with the fast integrator
-                   // selected by that type. Keep it, so a restarted run continues with the
-                   // same integrator even when the fitted surface happens to be flat;
-                   // downgrading to StretchedDz here would switch the fast integrator
-                   // relative to the original integration (and the midpoint substep_schedule
-                   // sub-cycle is not admitted by the stretched-mesh integrator's
-                   // single-substep first stage).
-                   if (verbose > 0) {
-                       amrex::Print() << "Terrain is flat; mesh type remains VariableDz to match the integrator of the checkpointed run" << std::endl;
-                   }
-               }
-           }
+           // The mesh type stays as set from the inputs, also when the surface is flat at the
+           // restart time, so that the restarted run uses the same fast integrator
         }
 
         // Read in the moisture model restart variables
