@@ -56,15 +56,6 @@ private:
     int force_stage1_single_substep;
 
    /**
-    * \brief Slow stage schedule: false = the ERF default three-stage WS-RK3 schedule
-    *        (dt/3, dt/2, dt), true = the two-stage midpoint (RK2) schedule (dt/2, dt).
-    *        The moving-mesh sub-step metric sampling (erf.substep_metric_sampling) lives in
-    *        the sub-step (ERF_TI_substep_fun.H) and is INDEPENDENT of this choice, so either
-    *        sampling can be run on either schedule.  See Docs/ITEM3_phase3_design.md.
-    */
-    bool use_midpoint_schedule = false;
-
-   /**
     * \brief The no_substep function is called when we have no acoustic substepping
     */
     std::function<void (T&, T&, T&, amrex::Real, amrex::Real, int)> no_substep;
@@ -138,11 +129,6 @@ public:
     void setForceFirstStageSingleSubstep(int _force_stage1_single_substep)
     {
         force_stage1_single_substep = _force_stage1_single_substep;
-    }
-
-    void set_midpoint_schedule(bool _use_midpoint_schedule)
-    {
-        use_midpoint_schedule = _use_midpoint_schedule;
     }
 
     void set_slow_rhs_pre (std::function<void(T&, T&, T&, const amrex::Real, const amrex::Real, const amrex::Real, const int)> F)
@@ -241,57 +227,8 @@ public:
 
         const amrex::Real sub_timestep = timestep / substep_ratio;
 
-        if (!anelastic && use_midpoint_schedule && !no_substepping) {
-          // ************************************************************************************
-          // Two-stage midpoint (RK2) stage schedule for the acoustic sub-cycling.
-          // Multirate-infinitesimal lift of explicit-midpoint RK2 (abscissae c=1/2, 1), RESTART
-          // semantics (each stage substeps the fast vars from S^n, matching the existing structure).
-          // The moving-mesh metric sampling inside the sub-step is selected separately by
-          // erf.substep_metric_sampling, so this schedule carries either sampling; the RK3
-          // branch below likewise carries either.
-          //   stage 0 -> Y2 at t+H/2 (slow RHS frozen at F(S^n));  stage 1 -> S^{n+1} (slow RHS
-          //   frozen at the MIDPOINT value F(Y2)). The slow-variable update in slow_rhs_post uses
-          //   slow_dt = new_stage_time - old_step_time, so stage 1 gives old + H*F(Y2) = midpoint rule.
-          //   GCL-consistent midpoint FLUX metrics are applied in the substep (l_o2 path); the
-          //   user's erf.beta_s is respected (beta_s=0 only in the formal-convergence configs).
-          // Derived + model-verified (Exec/o2_model/slow_fast_2var.py mode mrigark2_restart) and the
-          // GCL theorem (gcl_freestream.py). See Docs/ITEM3_MRIGARK_theory.md, ITEM3_phase3_design.md.
-          // ************************************************************************************
-          for (int nrk = 0; nrk < 2; nrk++)
-          {
-            old_time_stage = time_stage;
-
-            if (nrk == 0) {                          // integrate the fast vars from t to the midpoint t+H/2
-                nsubsteps = substep_ratio/2; dtau = sub_timestep;
-                time_stage = time + timestep / two;
-            }
-            if (nrk == 1) {                          // restart from S^n; integrate the full step [t, t+H]
-                nsubsteps = substep_ratio;   dtau = sub_timestep;
-                time_stage = time + timestep;
-            }
-
-            // slow RHS evaluated at the current stage state (S^n for nrk=0, the midpoint Y2 for nrk=1)
-            slow_rhs_pre(*F_slow, S_old, S_new, time, old_time_stage, time_stage, nrk);
-
-            amrex::Real inv_fac = one / static_cast<amrex::Real>(nsubsteps);
-
-            for (int ks = 0; ks < nsubsteps; ++ks)
-            {
-                acoustic_substepping(ks, nsubsteps, nrk, *F_slow, S_old, S_new, *S_sum, dtau, timestep, inv_fac,
-                                     time + ks*dtau, time + (ks+1) * dtau);
-            }
-
-            // assemble the stage state: fast vars from the substepping, slow vars via slow_dt-weighted update
-            slow_rhs_post(*F_slow, S_old, S_new, *S_sum, time, old_time_stage, time_stage, nrk);
-          } // nrk
-
-        } else if (!anelastic) {
-          // Three-stage Wicker-Skamarock RK3 schedule (the ERF default).  Each stage sub-cycles
-          // the fast variables outward from S^n over dt/3, dt/2, dt with the slow tendency frozen
-          // at the stage input.  On a moving mesh the sub-step flux-metric sampling is selected
-          // by erf.substep_metric_sampling (endpoint or GCL-consistent midpoint); the coupling
-          // is second order at fixed dtau under either, because the final stage already freezes
-          // the tendency at the midpoint state and its source geometry is the step midpoint.
+        if (!anelastic) {
+          // RK3 for compressible integrator
           for (int nrk = 0; nrk < 3; nrk++)
           {
             // Capture the time we got to in the previous RK step

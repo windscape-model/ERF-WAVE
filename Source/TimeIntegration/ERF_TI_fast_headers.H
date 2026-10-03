@@ -120,10 +120,9 @@ void erf_substep_MT (int step, int nrk, int level, int finest_level,
                      bool l_use_moisture, bool l_reflux,
                      const amrex::Real* sinesq_at_lev_d,
                      const amrex::Real l_damp_coef,
-                     const bool l_o2 = false,
-                     const bool radiation_top = false,
-                     const amrex::Real beta_d_in = amrex::Real(-1.0),
-                     const bool mid_volume = false);
+                     const bool mid_metric,
+                     const amrex::Real beta_d_in,
+                     const bool mid_volume);
 
 /**
  * Function for computing the coefficients for the tridiagonal solver used in the fast
@@ -144,7 +143,6 @@ void make_fast_coeffs (int level,
                        const amrex::MultiFab* pi0,
                        const amrex::Real dtau,
                        const amrex::Real beta_s,
-                       amrex::GpuArray<ERF_BC, AMREX_SPACEDIM*2> &phys_bc_type,
-                       const bool radiation_top = false);
+                       amrex::GpuArray<ERF_BC, AMREX_SPACEDIM*2> &phys_bc_type);
 
 #endif

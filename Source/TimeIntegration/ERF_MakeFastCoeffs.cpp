@@ -35,15 +35,11 @@ void make_fast_coeffs (int /*level*/,
                        std::unique_ptr<MultiFab>& detJ_cc,
                        const MultiFab* r0, const MultiFab* pi0,
                        Real dtau, Real beta_s,
-                       amrex::GpuArray<ERF_BC, AMREX_SPACEDIM*2> &phys_bc_type,
-                       const bool radiation_top)
+                       amrex::GpuArray<ERF_BC, AMREX_SPACEDIM*2> &phys_bc_type)
 {
     BL_PROFILE_VAR("make_fast_coeffs()",make_fast_coeffs);
 
     Real beta_2 = myhalf * (one + beta_s);  // multiplies implicit terms
-
-    amrex::ignore_unused(radiation_top);  // EXPERIMENTAL radiation top imposed via RHS in erf_substep_MT
-
 
     Real c_v = c_p - R_d;
     Real RvOverRd = R_v / R_d;
@@ -238,8 +234,6 @@ void make_fast_coeffs (int /*level*/,
               coeffA_a(i,j,hi.z+1) =  -one;
           }
 
-          // (EXPERIMENTAL radiation top is imposed via RHS_a(hi.z+1) in erf_substep_MT; Dirichlet row here.)
-
           // w = specified Dirichlet value at k = lo.z
           Real bet = coeffB_a(i,j,lo.z);
 
@@ -275,8 +269,6 @@ void make_fast_coeffs (int /*level*/,
                 {
                     coeffA_a(i,j,hi.z+1) =  -one;
                 }
-
-                // (EXPERIMENTAL radiation top imposed via RHS in erf_substep_MT; Dirichlet row here.)
             }
         }
         for (int k = lo.z+1; k <= hi.z+1; ++k) {

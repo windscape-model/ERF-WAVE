@@ -89,10 +89,9 @@ void erf_substep_MT (int step, int /*nrk*/,
                      bool l_reflux,
                      const Real* sinesq_stag_d,
                      const Real l_damp_coef,
-                     const bool l_o2,   // #2712 follow-on: midpoint FLUX-metric path (via z_phys_nd_flx; user beta_s respected)
-                     const bool radiation_top,  // characteristic radiation top BC (w=p'/(rho c)), gated
-                     const Real beta_d_in,      // divergence damping; < 0 = use the built-in rule below
-                     const bool mid_volume)     // diagnostic: midpoint volume on the sub-step-start state
+                     const bool mid_metric,                         // metric terms on z_phys_nd_flx (sub-step midpoint)
+                     const Real beta_d_in,                          // divergence damping; < 0 selects the default below
+                     const bool mid_volume)                         // mean volume on the sub-step-start state
 {
     BL_PROFILE_REGION("erf_substep_MT()");
 
@@ -110,7 +109,7 @@ void erf_substep_MT (int step, int /*nrk*/,
     // An explicit erf.beta_d (>= 0) overrides the rule on every path, so that the damping can be
     // held fixed across couplings when the couplings themselves are being compared.
     Real beta_d = (beta_d_in >= Real(0.0)) ? beta_d_in
-                                           : ((l_o2 && beta_s == Real(0.0)) ? Real(0.0) : Real(0.1));
+                                           : ((mid_metric && beta_s == Real(0.0)) ? Real(0.0) : Real(0.1));
 
     Real RvOverRd = R_v / R_d;
 
@@ -473,8 +472,8 @@ void erf_substep_MT (int step, int /*nrk*/,
         {
             // o2 (midpoint metrics): use GCL-consistent MIDPOINT cell Jacobian in the OPERATOR/flux terms
             // (free-stream preservation); the conservative VOLUME update below keeps genuine old/new.
-            Real dJo_k   = l_o2 ? myhalf*(detJ_old(i,j,k  )+detJ_new(i,j,k  )) : detJ_old(i,j,k  );
-            Real dJo_km1 = l_o2 ? myhalf*(detJ_old(i,j,k-1)+detJ_new(i,j,k-1)) : detJ_old(i,j,k-1);
+            Real dJo_k   = mid_metric ? myhalf*(detJ_old(i,j,k  )+detJ_new(i,j,k  )) : detJ_old(i,j,k  );
+            Real dJo_km1 = mid_metric ? myhalf*(detJ_old(i,j,k-1)+detJ_new(i,j,k-1)) : detJ_old(i,j,k-1);
             // Volume/normalization weight: ALWAYS the genuine sub-step-old Jacobian, on both paths.
             // It renormalizes the stage and current momenta into the level that prev_zmom is stored
             // in (the previous sub-step divided by its own detJ_new), and it must pair exactly with
@@ -591,18 +590,7 @@ void erf_substep_MT (int step, int /*nrk*/,
 
             soln_a(i,j,lo.z) = RHS_a(i,j,lo.z) * inv_coeffB_a(i,j,lo.z);
 
-            if (radiation_top) {
-                // Characteristic radiation top: impose cur_zmom(top) = p'/c (upward-acoustic impedance),
-                // p' = Gamma R_d pi * delta(rho theta) the acoustic pressure perturbation at the top cell.
-                // With the Dirichlet row (soln_a = RHS), this sets cur_zmom = stg_zmom + soln_a = p'/c.
-                Real th_t = prim(i,j,hi.z,PrimTheta_comp);
-                Real pi_t = pi_stage_ca(i,j,hi.z);
-                Real c_t  = std::sqrt(Gamma * R_d * pi_t * th_t);
-                Real dp_t = Gamma * R_d * pi_t * ( cur_cons(i,j,hi.z,RhoTheta_comp) - stg_cons(i,j,hi.z,RhoTheta_comp) );
-                RHS_a(i,j,hi.z+1) = dp_t / c_t - stg_zmom(i,j,hi.z+1);
-            } else {
-                RHS_a(i,j,hi.z+1) = dtau * (slow_rhs_rho_w(i,j,hi.z+1) + zmom_src_arr(i,j,hi.z+1));
-            }
+            RHS_a(i,j,hi.z+1) = dtau * (slow_rhs_rho_w(i,j,hi.z+1) + zmom_src_arr(i,j,hi.z+1));
 
             for (int k = lo.z+1; k <= hi.z+1; k++) {
                 soln_a(i,j,k) = (RHS_a(i,j,k)-coeffA_a(i,j,k)*soln_a(i,j,k-1)) * inv_coeffB_a(i,j,k);
@@ -630,18 +618,7 @@ void erf_substep_MT (int step, int /*nrk*/,
         for (int j = lo.y; j <= hi.y; ++j) {
              AMREX_PRAGMA_SIMD
              for (int i = lo.x; i <= hi.x; ++i) {
-                 if (radiation_top) {
-                // Characteristic radiation top: impose cur_zmom(top) = p'/c (upward-acoustic impedance),
-                // p' = Gamma R_d pi * delta(rho theta) the acoustic pressure perturbation at the top cell.
-                // With the Dirichlet row (soln_a = RHS), this sets cur_zmom = stg_zmom + soln_a = p'/c.
-                Real th_t = prim(i,j,hi.z,PrimTheta_comp);
-                Real pi_t = pi_stage_ca(i,j,hi.z);
-                Real c_t  = std::sqrt(Gamma * R_d * pi_t * th_t);
-                Real dp_t = Gamma * R_d * pi_t * ( cur_cons(i,j,hi.z,RhoTheta_comp) - stg_cons(i,j,hi.z,RhoTheta_comp) );
-                RHS_a(i,j,hi.z+1) = dp_t / c_t - stg_zmom(i,j,hi.z+1);
-            } else {
-                RHS_a(i,j,hi.z+1) = dtau * (slow_rhs_rho_w(i,j,hi.z+1) + zmom_src_arr(i,j,hi.z+1));
-            }
+                 RHS_a(i,j,hi.z+1) = dtau * (slow_rhs_rho_w(i,j,hi.z+1) + zmom_src_arr(i,j,hi.z+1));
              }
         }
         for (int k = lo.z+1; k <= hi.z+1; ++k) {
