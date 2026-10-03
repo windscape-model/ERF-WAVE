@@ -108,6 +108,13 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
             }
             // NOTE: std::swap above causes the field ptrs to be out of date.
             //       Reassign the field ptrs for MAC avg computation.
+            // On a moving mesh, rebuild the geometry-dependent reference-height maps so
+            // they track the instantaneous surface (they are otherwise frozen at the
+            // construction-time terrain, and a restarted run would rebuild them from a
+            // different mesh than an uninterrupted run did).
+            if (solverChoice.terrain_type == TerrainType::MovingFittedMesh) {
+                m_SurfaceLayer->update_surface_geometry(lev);
+            }
             m_SurfaceLayer->update_mac_ptrs(lev, vars_old, Theta_prim, Qv_prim, Qr_prim);
             m_SurfaceLayer->update_pblh(lev, vars_old, z_phys_cc[lev].get(),
                                         solverChoice.moisture_indices);
@@ -119,6 +126,7 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
 #endif
             m_SurfaceLayer->update_fluxes(lev, elapsed_time_since_start_low,
                                           S_old, z_phys_nd[lev], walldist[lev]);
+
         }
     }
 
@@ -376,5 +384,22 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
     // ***********************************************************************************************
     if (solverChoice.time_avg_vel) {
         Time_Avg_Vel_atCC(dt[lev], t_avg_cnt[lev], vel_t_avg[lev].get(), U_new, V_new, W_new);
+    }
+
+    // ***********************************************************************************************
+    // Re-synchronize the duplicated periodic wrap-face velocity DOFs (seam-point fix,
+    // 2026-07-08). The init-time OverrideSync (ERF::init syncs faces once) is not enough:
+    // the two valid copies of each wrap face are updated independently every step and
+    // decorrelate to O(1e-2) m/s within ~1500 s (measured from checkpoints), forming a
+    // spurious velocity discontinuity at the seam that nucleates the corner blow-up.
+    // The velocities are the carried state (momenta are rebuilt from them at step entry),
+    // so syncing the three face velocities here makes the wrap DOFs consistent.
+    // ***********************************************************************************************
+    if (solverChoice.face_sync_int > 0 && (istep[lev] % solverChoice.face_sync_int == 0)
+        && geom[lev].isAnyPeriodic())
+    {
+        U_new.OverrideSync(geom[lev].periodicity());
+        V_new.OverrideSync(geom[lev].periodicity());
+        W_new.OverrideSync(geom[lev].periodicity());
     }
 }

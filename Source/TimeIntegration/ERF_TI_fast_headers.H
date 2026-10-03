@@ -106,6 +106,7 @@ void erf_substep_MT (int step, int nrk, int level, int finest_level,
                      std::unique_ptr<amrex::MultiFab>& z_t_rk,
                      const amrex::MultiFab* z_t_pert,
                      std::unique_ptr<amrex::MultiFab>& z_phys_nd_old,
+                     const amrex::MultiFab* z_phys_nd_flx,
                      std::unique_ptr<amrex::MultiFab>& z_phys_nd_new,
                      std::unique_ptr<amrex::MultiFab>& z_phys_nd_stg,
                      std::unique_ptr<amrex::MultiFab>& detJ_cc_old,
@@ -118,7 +119,11 @@ void erf_substep_MT (int step, int nrk, int level, int finest_level,
                      amrex::YAFluxRegister* fr_as_fine,
                      bool l_use_moisture, bool l_reflux,
                      const amrex::Real* sinesq_at_lev_d,
-                     const amrex::Real l_damp_coef);
+                     const amrex::Real l_damp_coef,
+                     const bool l_o2 = false,
+                     const bool radiation_top = false,
+                     const amrex::Real beta_d_in = amrex::Real(-1.0),
+                     const bool mid_volume = false);
 
 /**
  * Function for computing the coefficients for the tridiagonal solver used in the fast
@@ -139,6 +144,7 @@ void make_fast_coeffs (int level,
                        const amrex::MultiFab* pi0,
                        const amrex::Real dtau,
                        const amrex::Real beta_s,
-                       amrex::GpuArray<ERF_BC, AMREX_SPACEDIM*2> &phys_bc_type);
+                       amrex::GpuArray<ERF_BC, AMREX_SPACEDIM*2> &phys_bc_type,
+                       const bool radiation_top = false);
 
 #endif

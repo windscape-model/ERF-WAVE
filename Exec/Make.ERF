@@ -509,7 +509,7 @@ ifeq ($(USE_NOAHMP), TRUE)
 endif
 
 all: build_noahmp $(executable)
-	(SILENT) $(RM) AMReX_buildInfo.cpp
+	$(SILENT) $(RM) AMReX_buildInfo.cpp
 	@echo SUCCESS
 
 AMReX_buildInfo.cpp:

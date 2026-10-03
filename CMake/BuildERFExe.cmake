@@ -43,6 +43,12 @@ function(build_erf_lib erf_lib_name)
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_IMPLICIT_W)
   endif()
 
+  # Orbital no-slip moving-wall BC (wind-over-wave). Mirrors the GNUmake
+  # TERRAIN_VELOCITY=TRUE gate (Exec/GNUmakefile -> -DERF_USE_TERRAIN_VELOCITY).
+  if(ERF_ENABLE_TERRAIN_VELOCITY)
+    target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_TERRAIN_VELOCITY)
+  endif()
+
   if(ERF_ENABLE_MULTIBLOCK)
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_MULTIBLOCK)
   endif()

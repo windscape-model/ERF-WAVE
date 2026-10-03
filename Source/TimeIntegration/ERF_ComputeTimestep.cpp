@@ -41,7 +41,18 @@ ERF::ComputeDt (int step, double cur_time_d)
     //
     const Real eps = Real(1.e-3)*dt_0;
     if (cur_time_d + static_cast<double>(dt_0) > static_cast<double>(stop_time - start_time) - static_cast<double>(eps)) {
-        dt_0 = static_cast<Real>(static_cast<double>(stop_time - start_time) - cur_time_d);
+        const double dt_clamp = static_cast<double>(stop_time - start_time) - cur_time_d;
+        // Shorten the step only when a genuine partial step remains. When the remaining
+        // interval is one whole dt up to the roundoff accumulated in cur_time_d (fixed-dt
+        // runs whose dt is not exactly representable in binary), clamping would perturb the
+        // final step by O(ulp); a run stopped at this stop_time -- and any checkpoint it
+        // writes -- would then differ bitwise from the same run carried straight through,
+        // and a restarted continuation would advance on a shifted time grid. Evolve's stop
+        // test (>= stop_time - 1.e-6*dt) still ends the run on an unshortened final step,
+        // so the two tolerances must stay consistent.
+        if (std::abs(dt_clamp - static_cast<double>(dt_0)) > static_cast<double>(Real(1.e-6)*dt_0)) {
+            dt_0 = static_cast<Real>(dt_clamp);
+        }
     }
 
     dt[0] = dt_0;

@@ -155,6 +155,23 @@ make_terrain_fitted_coords (int lev, const Geometry& geom, MultiFab& z_phys_nd,
                              + (k-domhi_z) * (z_arr(i,j,domhi_z) - z_arr(i,j,domhi_z-1));
             });
         }
+
+        // Below-bottom ghost planes (k < domlo_z): FillBoundary cannot reach them (there
+        // is no valid source plane below the domain), and the smoothing-specific builders
+        // in init_which_terrain_grid fill them from laterally CLIPPED columns, leaving
+        // O(terrain-amplitude) errors in lateral-ghost columns at domain edges under
+        // periodicity (audit 2026-07-05 D4-4). Recompute them here by downward linear
+        // extrapolation from the now-periodic bottom planes, for every terrain path.
+        if (nd_bx.smallEnd(2) <= domlo_z) {
+            Box bx_zlo = mfi.growntilebox(ngrow);
+            bx_zlo.setBig(2,domlo_z-1);
+            Array4<Real> const& z_arr = z_phys_nd.array(mfi);
+
+            ParallelFor(bx_zlo, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                z_arr(i,j,k) = z_arr(i,j,domlo_z)
+                             + (k-domlo_z) * (z_arr(i,j,domlo_z+1) - z_arr(i,j,domlo_z));
+            });
+        }
     }
 } // make_terrain_fitted_coords
 
