@@ -258,6 +258,40 @@ MOSTAverage::make_MOSTAverage_at_level (const int& lev,
 }
 
 
+
+void
+MOSTAverage::update_geometry_maps (const int& lev)
+{
+    bool use_terrain_fitted_coords = ( (m_terrain_type == TerrainType::StaticFittedMesh) ||
+                                       (m_terrain_type == TerrainType::MovingFittedMesh) );
+    bool use_eb = (m_terrain_type == TerrainType::EB);
+
+    if (use_terrain_fitted_coords && m_norm_vec && m_interp) { // Terrain w/ norm & w/ interpolation
+        set_norm_positions_T(lev);
+    } else if (use_terrain_fitted_coords && m_interp) {        // Terrain w/ interpolation
+        set_z_positions_T(lev);
+    } else if (use_terrain_fitted_coords && m_norm_vec) {      // Terrain w/ norm & w/o interpolation
+        set_norm_indices_T(lev);
+    } else if (use_terrain_fitted_coords) {                    // Terrain
+        set_k_indices_T(lev);
+    } else if (use_eb) {                                       // EB
+        set_k_indices_EB(lev);
+    } else {                                                   // No Terrain
+        set_k_indices_N(lev);
+    }
+
+    switch(m_policy) {
+    case 0: // Plane average
+        set_plane_normalization(lev);
+        break;
+    case 1: // Local region/point
+        set_region_normalization(lev);
+        break;
+    default:
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown policy for MOSTAverage!");
+    }
+}
+
 /**
  * Function to reset the pointers to field variables.
  *

@@ -716,9 +716,16 @@ ERF::ReadCheckpointFile ()
 
                auto dz = geom[lev].CellSize()[2];
                if (z_max - z_min < Real(1.e-8) * dz) {
-                   SolverChoice::set_mesh_type(MeshType::StretchedDz);
+                   // The mesh type was set from the terrain type when the inputs were read,
+                   // and the run that wrote this checkpoint advanced with the fast integrator
+                   // selected by that type. Keep it, so a restarted run continues with the
+                   // same integrator even when the fitted surface happens to be flat;
+                   // downgrading to StretchedDz here would switch the fast integrator
+                   // relative to the original integration (and the midpoint substep_schedule
+                   // sub-cycle is not admitted by the stretched-mesh integrator's
+                   // single-substep first stage).
                    if (verbose > 0) {
-                       amrex::Print() << "Resetting mesh type to StretchedDz since terrain is flat" << std::endl;
+                       amrex::Print() << "Terrain is flat; mesh type remains VariableDz to match the integrator of the checkpointed run" << std::endl;
                    }
                }
            }

@@ -36,4 +36,11 @@ Blocs := .
 
 ERF_HOME := ../
 ERF_PROBLEM_DIR = $(ERF_HOME)/Exec
+
+# Optional: orbital no-slip moving-wall BC (viscous moving-wave case). Enable with TERRAIN_VELOCITY=TRUE.
+ifeq ($(TERRAIN_VELOCITY),TRUE)
+  DEFINES += -DERF_USE_TERRAIN_VELOCITY
+  USERSuffix := .TV
+endif
+
 include $(ERF_HOME)/Exec/Make.ERF

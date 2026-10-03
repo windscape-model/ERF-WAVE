@@ -230,6 +230,25 @@ void ERFPhysBCFunct_u::impose_vertical_xvel_bcs (const Array4<Real>& dest_arr,
         l_bc_extdir_vals_d[0][ori] = m_bc_extdir_vals[bccomp][ori];
     }
 
+#ifdef ERF_USE_TERRAIN_VELOCITY
+    // No-slip moving-wall (orbital) velocity for the prescribed wave h=a sin(kx-wt):
+    // u_w(x,t) = a*omega*sin(kx - omega t).  Wave parameters read from the inputs.
+    // NB: these MUST be plain (non-static) locals so the [=] device lambda below captures them BY
+    //     VALUE. A `static const` is a host variable that the lambda references directly (not by
+    //     capture) -> "reference to __host__ variable in __device__ function" on HIP/GPU.
+    Real tv_Ampl = Real(0.0);
+    Real tv_wl   = Real(100.0);
+    Real tv_c    = Real(0.0);
+    { ParmParse pp("prob"); pp.query("Ampl", tv_Ampl); pp.query("wavelength", tv_wl); pp.query("wave_c", tv_c); }
+    const Real tv_k   = Real(2.0)*PI / tv_wl;
+    const Real tv_om  = (tv_c > Real(0.0)) ? tv_c * tv_k : std::sqrt(CONST_GRAV * tv_k);
+    const Real tv_plo = geomdata.ProbLo(0);
+    const Real tv_dx  = Real(1.0) / dxInv[0];
+    // Rest-started ramp R(t)=1/2(1-cos(omega t)) for omega t < pi (R(0)=0, R'(0)=0), else 1, so the
+    // moving-wall velocity starts from rest consistently with a quiescent initial atmosphere.
+    const Real tv_ramp = (tv_om*time < PI) ? Real(0.5)*(Real(1.0)-std::cos(tv_om*time)) : Real(1.0);
+#endif
+
     {
         // Populate ghost cells on lo-z and hi-z domain boundaries
         Box bx_zlo(bx);  bx_zlo.setBig  (2,dom_lo.z-1);
@@ -239,7 +258,9 @@ void ERFPhysBCFunct_u::impose_vertical_xvel_bcs (const Array4<Real>& dest_arr,
                 int kflip = dom_lo.z - 1 - k;
                 if (bc_ptr[0].lo(2) == ERFBCType::ext_dir) {
                     #ifdef ERF_USE_TERRAIN_VELOCITY
-                        dest_arr(i,j,k) = prob->compute_terrain_velocity(time);
+                        // (x,t)-dependent moving-wall (orbital) velocity at this x-face location
+                        Real xface = tv_plo + amrex::Real(i) * tv_dx;
+                        dest_arr(i,j,k) = tv_ramp * tv_Ampl * tv_om * std::sin(tv_k*xface - tv_om*time);
                     #else
                         dest_arr(i,j,k) = l_bc_extdir_vals_d[0][2];
                     #endif

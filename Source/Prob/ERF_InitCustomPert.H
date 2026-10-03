@@ -39,12 +39,5 @@ erf_vortex_Gaussian(
   return beta * std::exp(-r2/(two*sigma*sigma));
 }
 
-#ifdef ERF_USE_TERRAIN_VELOCITY
-amrex::Real
-Problem::compute_terrain_velocity (const amrex::Real time)
-{
-    amrex::Real U = amrex::Real(10.0);
-    amrex::Real omega = two*M_PI*amrex::Real(1000.0);
-    return U*cos(omega*time);
-}
-#endif
+// Note: the no-slip moving-wall (orbital) velocity for the moving-wave case is imposed directly in the
+// xvel lower-boundary fill (ERF_BoundaryConditionsXvel.cpp, under ERF_USE_TERRAIN_VELOCITY).

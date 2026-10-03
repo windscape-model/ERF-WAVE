@@ -1100,6 +1100,16 @@ ERF::InitData_post ()
             (*physbcs_base[lev])(base_state[lev],0,base_state[lev].nComp(),base_state[lev].nGrowVect());
         }
 
+        // The SurfaceLayer (and its MOSTAverage reference-height maps) was constructed
+        // during MakeNewLevelFromScratch, BEFORE the checkpoint terrain and state were
+        // loaded. Rebuild the geometry-dependent maps from the restored terrain so a
+        // restarted run reproduces an uninterrupted one.
+        if (m_SurfaceLayer) {
+            for (int lev(0); lev <= finest_level; ++lev) {
+                m_SurfaceLayer->update_surface_geometry(lev);
+            }
+        }
+
         if (solverChoice.do_forest_drag) {
             for (int lev(0); lev <= finest_level; ++lev) {
                 m_forest_drag[lev]->define_drag_field(grids[lev], dmap[lev], geom[lev],
@@ -3210,7 +3220,7 @@ ERF::check_state_for_nans(MultiFab const& S)
     }
 
     if (any_have_nans) {
-        exit(0);
+        amrex::Abort("NaNs in conserved state (check_state_for_nans)");   // nonzero exit; exit(0) masked failure from SLURM (audit 2.9)
     }
 }
 
@@ -3237,7 +3247,7 @@ ERF::check_vels_for_nans(MultiFab const& xvel, MultiFab const& yvel, MultiFab co
         any_have_nans = true;
     }
     if (any_have_nans) {
-        exit(0);
+        amrex::Abort("NaNs in velocity (check_vels_for_nans)");   // nonzero exit (audit 2.9)
     }
 }
 
@@ -3311,4 +3321,19 @@ ERF::check_for_negative_theta(amrex::MultiFab& S)
 
             });
     } // mfi
+
+    // Deterministic failure detection (audit 2026-07-05 item 2.9). The per-cell guard
+    // above prints locations but cannot stop a GPU run, and NaN makes its comparisons
+    // false, so a blown run "zombie-steps" NaN fields to completion and finalizes
+    // normally (5 of 13 production deaths were silent). These host-side reductions
+    // catch both non-positive and NaN states and abort with a nonzero exit code.
+    Real rho_min = S.min(Rho_comp,0);
+    Real rt_min  = S.min(RhoTheta_comp,0);
+    bool has_nan = S.contains_nan(Rho_comp,1,0) || S.contains_nan(RhoTheta_comp,1,0);
+    if (has_nan || rho_min <= zero || rt_min <= zero) {
+        amrex::Print() << "check_for_negative_theta: FATAL: min(rho) = " << rho_min
+                       << ", min(rhotheta) = " << rt_min
+                       << (has_nan ? ", NaNs present" : "") << std::endl;
+        amrex::Abort("Bad state (NaN or non-positive rho/rhotheta) in check_for_negative_theta");
+    }
 }

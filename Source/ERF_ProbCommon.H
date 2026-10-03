@@ -655,12 +655,6 @@ public:
         }
     }
 
-#ifdef ERF_USE_TERRAIN_VELOCITY
-    virtual amrex::Real compute_terrain_velocity(const amrex::Real /*time*/)
-    {
-        amrex::Error("Should never call compute_terrain_velocity for "+name()+" problem");
-    }
-#endif
 
     /**
      * Function to define the quantities needed to impose Rayleigh damping

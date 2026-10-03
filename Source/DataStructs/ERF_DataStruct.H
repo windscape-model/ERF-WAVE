@@ -53,6 +53,59 @@ AMREX_ENUM(SubsteppingType,
     None, Implicit
 );
 
+// Slow-stage schedule that drives the acoustic sub-cycle.  RK3 is the ERF default
+// three-stage Wicker-Skamarock schedule; Midpoint is the two-pass (RK2) midpoint
+// schedule.  This is INDEPENDENT of erf.substep_time_order, which selects the
+// moving-mesh metric evaluation used inside each sub-step (see ERF_TI_substep_fun.H).
+AMREX_ENUM(SubstepSchedule,
+    RK3, Midpoint
+);
+
+// Sub-step flux-metric sampling on a moving mesh: Endpoint takes the pressure-gradient and
+// contravariant-flux metrics at the sub-step start, Midpoint at the sub-step midpoint (the
+// GCL-consistent choice).  The conservative volume weights stay at the genuine sub-step
+// endpoints under both, and the slow-fast coupling is second order at fixed dtau under both;
+// the samplings differ at O(dt^2).  Primary flag erf.substep_metric_sampling; the deprecated
+// alias erf.substep_time_order (1|2) is kept for existing decks.
+AMREX_ENUM(SubstepMetricSampling,
+    Endpoint, Midpoint
+);
+
+// Cadence at which the moving-mesh geometry entering the operators is refreshed.
+// PerSubstep (default): the flux and pressure-gradient metrics and the grid velocity follow the
+// surface through every acoustic sub-step.  PerStep: they are held at the model-step-start
+// geometry for the whole step, the cadence of the WRF moving-bottom implementation, in which the
+// hydrostatic variables are rebalanced once per model time step.  The conservative volume
+// weights follow the sub-steps in both cases, so mass conservation is unaffected by the choice.
+AMREX_ENUM(MovingGeometryUpdate,
+    PerSubstep, PerStep
+);
+
+// How the grid velocity carried by the moving-mesh fluxes is sampled.
+// DiscreteDisplacement (default): (z^{m+1} - z^m)/dtau over the sub-step, for which
+// d(zt)/dzeta equals (J^{m+1} - J^m)/dtau identically, so a constant field is preserved exactly.
+// IntervalStart: the rate over the preceding interval, i.e. sampled at the start of the sub-step
+// rather than across it.  The metric identity is then violated at O(dtau) and free-stream
+// preservation degrades to first order, which is the sampling analyzed in the reduced model.
+AMREX_ENUM(GridVelocitySampling,
+    DiscreteDisplacement, IntervalStart
+);
+
+// Time level of the mesh on which the slow tendency of each stage is evaluated (diagnostic option).
+// StageTime (default): the mesh at the stage time.  StepStart: the mesh at the model-step start for
+// every stage, with the fast geometry unchanged; it isolates the stage-time geometry condition.
+AMREX_ENUM(SlowGeometryTime,
+    StageTime, StepStart
+);
+
+// Cell volume that multiplies the state of the sub-step start in the conservative sub-step update
+// (diagnostic option).  Endpoint (default): J_new q_new = J_old q_old + dtau (...).  Midpoint: the
+// average of the start and end volumes, J_new q_new = J_mid q_old + dtau (...), applied to the density,
+// the potential-temperature density and the horizontal momenta; it isolates the endpoint-volume condition.
+AMREX_ENUM(SubstepVolumeSampling,
+    Endpoint, Midpoint
+);
+
 AMREX_ENUM(MeshType,
     ConstantDz, StretchedDz, VariableDz
 );
@@ -416,6 +469,121 @@ struct SolverChoice {
         pp.query("substepping_diag", substepping_diag);
 
         pp.query("beta_s", beta_s);
+
+        // Periodic wrap-face DOF synchronization interval (steps). ERF evolves
+        // face-centered velocities; under periodicity the wrap faces (x-face 0 vs nx,
+        // etc.) are the SAME physical DOF stored twice and updated independently.
+        // Without in-loop OverrideSync they decorrelate (measured: flat-bed static,
+        // exact 0 at t=0 -> 1.1e-2 m/s at t=1500, max at the death band k=68) and
+        // every long doubly-periodic run dies at the seam crossing. Default 1 = sync
+        // every step (cheap); 0 disables (for A/B forensics only).
+        pp.query("face_sync_int", face_sync_int);
+
+        // Sub-step FLUX-METRIC sampling on the MOVING mesh (issue #2712 follow-on).
+        // This selects the moving-mesh metric evaluation inside each acoustic sub-step, and is
+        // independent of the slow stage schedule (erf.substep_schedule) chosen below.
+        //   midpoint (default on the moving mesh): GCL-consistent flux metrics
+        //                       (pressure-gradient and contravariant-flux metrics at the
+        //                       sub-step midpoint, fast coefficients on the midpoint Jacobian);
+        //                       the scheme of the mrigark paper.
+        //   endpoint          : flux metrics at the sub-step start (the direct extension of the
+        //                       static-grid scheme; the choice is inert off the moving mesh, so
+        //                       it is also the resolved value there).
+        // The conservative volume weights stay at the genuine sub-step endpoints under BOTH
+        // choices, and the slow-fast coupling is second order at fixed dtau under both; the two
+        // samplings differ at O(dt^2), the endpoint one adding a dtau-floor contribution.  This
+        // flag therefore selects a metric prescription, not a temporal order.
+        // Deprecated alias: erf.substep_time_order = 1 (endpoint) | 2 (midpoint).  For decks
+        // that pre-date erf.substep_schedule the alias also keeps implying the legacy midpoint
+        // schedule below, so their behavior is bit-for-bit unchanged.
+        const int n_metric_new = pp.countval("substep_metric_sampling");
+        const int n_metric_old = pp.countval("substep_time_order");
+        if (n_metric_new > 0) {
+            SubstepMetricSampling ms = SubstepMetricSampling::Endpoint;
+            pp.query_enum_case_insensitive("substep_metric_sampling", ms);
+            substep_time_order = (ms == SubstepMetricSampling::Midpoint) ? 2 : 1;
+        }
+        if (n_metric_old > 0) {
+            int legacy_order = substep_time_order;
+            pp.query("substep_time_order", legacy_order);
+            if (n_metric_new > 0 && legacy_order != substep_time_order) {
+                amrex::Error("erf.substep_time_order conflicts with erf.substep_metric_sampling; "
+                             "set only one (prefer erf.substep_metric_sampling)");
+            }
+            substep_time_order = legacy_order;
+            if (n_metric_new == 0) {
+                amrex::Print() << "NOTE: erf.substep_time_order is deprecated; use "
+                               << "erf.substep_metric_sampling = "
+                               << ((legacy_order == 2) ? "midpoint" : "endpoint") << std::endl;
+            }
+        }
+        if (n_metric_new == 0 && n_metric_old == 0 &&
+            terrain_type == TerrainType::MovingFittedMesh) {
+            // Neither flag named: default to the GCL-consistent midpoint sampling on the moving
+            // mesh.  (Explicitly conditional so that fixed-mesh runs keep the inert endpoint
+            // value and never see the moving-mesh NOTE below; and because only the NAMED
+            // deprecated alias implies the legacy midpoint schedule, this default cannot
+            // change anyone's schedule.)
+            substep_time_order = 2;
+        }
+
+        // Slow stage schedule driving the acoustic sub-cycle:
+        //   rk3      : the ERF default three-stage Wicker-Skamarock schedule (dt/3, dt/2, dt)
+        //   midpoint : the two-stage midpoint (RK2) schedule (dt/2, dt)
+        // Legacy default: erf.substep_time_order=2 selected the midpoint schedule implicitly,
+        // so when the schedule is not named and only the DEPRECATED alias asked for midpoint
+        // metrics we keep that behavior (bit-for-bit reproducibility of runs that pre-date this
+        // flag) and RK3 otherwise.  The new erf.substep_metric_sampling flag never implies a
+        // schedule.  Naming the schedule always wins.
+        if (pp.countval("substep_schedule") > 0) {
+            pp.query_enum_case_insensitive("substep_schedule", substep_schedule);
+            substep_schedule_was_set = true;
+        } else if (n_metric_old > 0 && n_metric_new == 0 && substep_time_order == 2) {
+            substep_schedule = SubstepSchedule::Midpoint;
+            substep_schedule_legacy_inferred = true;
+        } else {
+            substep_schedule = SubstepSchedule::RK3;
+        }
+
+        // Cadence of the moving-mesh geometry seen by the operators (see the enum above).
+        pp.query_enum_case_insensitive("moving_geometry_update", moving_geometry_update);
+
+        // Sampling of the grid velocity carried by the moving-mesh fluxes (see the enum above).
+        pp.query_enum_case_insensitive("grid_velocity_sampling", grid_velocity_sampling);
+
+        // Diagnostic options for the conditions of the coupling-order analysis (defaults = the scheme).
+        pp.query_enum_case_insensitive("slow_geometry_time", slow_geometry_time);
+        pp.query_enum_case_insensitive("substep_volume_sampling", substep_volume_sampling);
+
+        // Horizontal divergence damping coefficient (KSD07).  Negative (default) means
+        // "use the built-in rule": 0.1 everywhere except the fully undamped formal-convergence
+        // configuration on the moving mesh (midpoint metrics with beta_s = 0), where it is 0.
+        // Setting it explicitly overrides the rule for every path, which is what an A/B test
+        // of the damping itself requires.
+        pp.query("beta_d", beta_d);
+
+        // Characteristic radiation top boundary for the vertically-implicit acoustic substep.
+        // Replaces the rigid top row (w=z_t) with the upward-acoustic impedance relation w=p'/(rho c),
+        // so the sound radiated by a moving lower surface exits instead of reflecting. Default off
+        // (rigid lid, bit-identical). See Docs/ITEM3_phase3_design.md / mrigark_paper.
+        pp.query("use_acoustic_radiation_top", use_acoustic_radiation_top);
+        if (substep_time_order != 1 && substep_time_order != 2) {
+            amrex::Error("erf.substep_time_order must be 1 or 2");
+        }
+
+        // The two-pass midpoint schedule sub-cycles M/2 acoustic steps in its first stage.  The
+        // non-moving-mesh fast integrators (erf_substep_T / erf_substep_NS) assume a single
+        // sub-step in stage 0, so refuse the combination instead of tripping their assertion.
+        if (substep_schedule == SubstepSchedule::Midpoint &&
+            terrain_type != TerrainType::MovingFittedMesh) {
+            amrex::Error("erf.substep_schedule = midpoint requires terrain_type = MovingFittedMesh; "
+                         "the fixed-mesh fast integrators admit only a single sub-step in stage 0");
+        }
+        if (substep_time_order == 2 && terrain_type != TerrainType::MovingFittedMesh) {
+            amrex::Print() << "NOTE: midpoint sub-step metric sampling selects the moving-mesh "
+                           << "metric evaluation and has no effect without a moving mesh"
+                           << std::endl;
+        }
 
 
 
@@ -892,6 +1060,25 @@ struct SolverChoice {
            }
         }
 
+        // Report the resolved slow-fast coupling: the stage schedule and the moving-mesh metric
+        // sampling are independent choices, so name both rather than leaving either implied.
+        // (No order labels here: the coupling is second order at fixed dtau under either
+        // sampling; see mrigark_paper.)
+        if (terrain_type == TerrainType::MovingFittedMesh) {
+            amrex::Print() << "moving-mesh coupling        : "
+                           << ((substep_schedule == SubstepSchedule::Midpoint) ? "two-stage midpoint (RK2)"
+                                                                              : "three-stage RK3")
+                           << " schedule with "
+                           << ((substep_time_order == 2) ? "midpoint" : "endpoint")
+                           << " sub-step flux metrics" << std::endl;
+            if (substep_schedule_legacy_inferred) {
+                amrex::Print() << "   (schedule not named: keeping the legacy midpoint schedule for "
+                               << "the deprecated erf.substep_time_order = 2; set erf.substep_schedule "
+                               << "= rk3, or use erf.substep_metric_sampling = midpoint, for the "
+                               << "midpoint metrics on the default RK3 schedule)" << std::endl;
+            }
+        }
+
         amrex::Print() << "vert_implicit_fac           : " << vert_implicit_fac[0] << " "
                                                            << vert_implicit_fac[1] << " "
                                                            << vert_implicit_fac[2];
@@ -1118,6 +1305,41 @@ struct SolverChoice {
     // time off-centering coefficient, > 0 for forward weighting (i.e., bias
     // towards the future time step)
     amrex::Real beta_s = amrex::Real(0.1);
+    int face_sync_int = 1;   // periodic wrap-face OverrideSync every N steps (0 = off)
+
+    // Resolved sub-step flux-metric sampling on the moving mesh (1 = endpoint, 2 = midpoint;
+    // see SubstepMetricSampling above).  Set by erf.substep_metric_sampling or its deprecated
+    // alias erf.substep_time_order; when neither is named the parser defaults to midpoint on
+    // the moving mesh (the paper's scheme) and leaves the inert endpoint value elsewhere.
+    // The volume weights are genuine sub-step endpoints under both, and the coupling is second
+    // order at fixed dtau under both.  Independent of substep_schedule below.  See issue #2712
+    // and mrigark_paper.
+    int substep_time_order = 1;
+
+    // Slow stage schedule driving the acoustic sub-cycle (RK3 = ERF default three-stage
+    // Wicker-Skamarock; Midpoint = two-stage RK2 midpoint).  Resolved in the parser: when the
+    // schedule is not named, the deprecated substep_time_order = 2 keeps the legacy midpoint
+    // schedule (substep_schedule_legacy_inferred records that this happened).
+    SubstepSchedule substep_schedule = SubstepSchedule::RK3;
+    bool substep_schedule_was_set = false;
+    bool substep_schedule_legacy_inferred = false;
+
+    // Cadence of the moving-mesh geometry seen by the flux and pressure-gradient operators and by
+    // the grid velocity: every acoustic sub-step (default) or once per model step.
+    MovingGeometryUpdate moving_geometry_update = MovingGeometryUpdate::PerSubstep;
+
+    // Sampling of the grid velocity in the moving-mesh fluxes: the discrete displacement across
+    // the sub-step (default, exact metric identity) or the rate over the preceding interval.
+    GridVelocitySampling grid_velocity_sampling = GridVelocitySampling::DiscreteDisplacement;
+    SlowGeometryTime slow_geometry_time = SlowGeometryTime::StageTime;
+    SubstepVolumeSampling substep_volume_sampling = SubstepVolumeSampling::Endpoint;
+
+    // Horizontal divergence-damping coefficient; < 0 means "use the built-in rule"
+    // (0.1, except 0 for the undamped midpoint-metric convergence configuration with beta_s = 0).
+    amrex::Real beta_d = amrex::Real(-1.0);
+
+    // Characteristic radiation top BC for the implicit acoustic substep (default off = rigid lid).
+    bool use_acoustic_radiation_top = false;
 
     // This controls the time-centering of the *vertical* differences in the diffusive term for
     // theta, u, v (and w if ERF_IMPLICIT_W is set)

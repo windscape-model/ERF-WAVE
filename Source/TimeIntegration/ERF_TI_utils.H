@@ -180,9 +180,37 @@
             FArrayBox terrain_fab_src(makeSlab(terrain_bx,2,0),1);
             FArrayBox terrain_fab_new(makeSlab(terrain_bx,2,0),1);
 
+            // The "src" geometry is the mesh on which the slow tendency is evaluated, so it
+            // multiplies the full fields rather than an acoustic perturbation.  Refreshing it at
+            // the stage input re-centers it with the staging; holding it at the model-step start
+            // is the cadence of the WRF moving-bottom implementation, whose hydrostatic variables
+            // are rebalanced once per model time step.
+            const Real src_time = (solverChoice.moving_geometry_update == MovingGeometryUpdate::PerStep ||
+                                   solverChoice.slow_geometry_time == SlowGeometryTime::StepStart)
+                                ? old_step_time : old_stage_time;
+
             prob->init_terrain_surface(fine_geom,terrain_fab_old,old_step_time);
-            prob->init_terrain_surface(fine_geom,terrain_fab_src,old_stage_time);
+            prob->init_terrain_surface(fine_geom,terrain_fab_src,src_time);
             prob->init_terrain_surface(fine_geom,terrain_fab_new,new_stage_time);
+
+            // Surface one stage-interval before the step start: with IntervalStart sampling the
+            // stage grid velocity is the rate over the PRECEDING interval, i.e. evaluated at the
+            // start of the interval being advanced rather than across it.  This is the sampling
+            // the reduced free-stream model calls 'endpoint'.
+            const bool l_zt_start = (solverChoice.grid_velocity_sampling == GridVelocitySampling::IntervalStart);
+            std::unique_ptr<MultiFab> z_nd_lag;
+            if (l_zt_start) {
+                FArrayBox terrain_fab_lag(makeSlab(terrain_bx,2,0),1);
+                prob->init_terrain_surface(fine_geom,terrain_fab_lag,old_step_time-slow_dt);
+                z_nd_lag = std::make_unique<MultiFab>(z_phys_nd[lev]->boxArray(),
+                                                      z_phys_nd[lev]->DistributionMap(),
+                                                      1, z_phys_nd[lev]->nGrowVect());
+                for (MFIter mfi(*z_nd_lag,false); mfi.isValid(); ++mfi) {
+                    Box isect = terrain_fab_lag.box() & (*z_nd_lag)[mfi].box();
+                    (*z_nd_lag)[mfi].template copy<RunOn::Device>(terrain_fab_lag,isect,0,isect,0,1);
+                }
+                make_terrain_fitted_coords(lev,fine_geom,*z_nd_lag, zlevels_stag[lev], phys_bc_type);
+            }
 
             // Copy on intersection
             for (MFIter mfi(*z_phys_nd[lev],false); mfi.isValid(); ++mfi)
@@ -219,8 +247,13 @@
                 Box gbx = mfi.growntilebox(IntVect(1,1,0));
 
                 const Array4<Real      >& z_t_arr      =  z_t_rk[lev]->array(mfi);
-                const Array4<Real const>& z_nd_new_arr =  z_phys_nd_new[lev]->const_array(mfi);
-                const Array4<Real const>& z_nd_old_arr =  z_phys_nd[lev]->const_array(mfi);
+                const Array4<Real const>& z_nd_new_raw =  z_phys_nd_new[lev]->const_array(mfi);
+                const Array4<Real const>& z_nd_old_raw =  z_phys_nd[lev]->const_array(mfi);
+                const Array4<Real const>& z_nd_lag_arr =  z_nd_lag ? z_nd_lag->const_array(mfi)
+                                                                  : z_nd_old_raw;
+                // (old,new) across the stage interval, or (lagged,old) over the preceding one
+                const Array4<Real const>& z_nd_new_arr =  l_zt_start ? z_nd_old_raw : z_nd_new_raw;
+                const Array4<Real const>& z_nd_old_arr =  l_zt_start ? z_nd_lag_arr : z_nd_old_raw;
 
                 // Loop over horizontal plane
                 amrex::ParallelFor(gbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
@@ -252,6 +285,15 @@
         FArrayBox terrain_fab_new(makeSlab(terrain_bx,2,0),1);
         prob->init_terrain_surface(fine_geom,terrain_fab_new,new_substep_time);
 
+        // Surface one sub-step back, used only when the grid velocity is sampled over the
+        // preceding interval instead of across this one (see GridVelocitySampling).
+        const bool l_lagged_zt = (solverChoice.grid_velocity_sampling == GridVelocitySampling::IntervalStart);
+        FArrayBox terrain_fab_prv;   // sized only when the lagged sampling is on (used twice below)
+        if (l_lagged_zt) {
+            terrain_fab_prv.resize(makeSlab(terrain_bx,2,0),1);
+            prob->init_terrain_surface(fine_geom,terrain_fab_prv,old_substep_time-dtau);
+        }
+
         // Copy on intersection
         for (MFIter mfi(*z_phys_nd[lev],false); mfi.isValid(); ++mfi)
         {
@@ -266,6 +308,19 @@
         make_terrain_fitted_coords(lev,fine_geom,*z_phys_nd_new[lev], zlevels_stag[lev], phys_bc_type);
         make_J             (fine_geom,*z_phys_nd_new[lev], *detJ_cc_new[lev]);
 
+        // Fitted nodes one sub-step back (only built for the IntervalStart sampling).
+        std::unique_ptr<MultiFab> prv_mf;
+        if (l_lagged_zt) {
+            prv_mf = std::make_unique<MultiFab>(z_phys_nd[lev]->boxArray(),
+                                                z_phys_nd[lev]->DistributionMap(),
+                                                1, z_phys_nd[lev]->nGrowVect());
+            for (MFIter mfi(*prv_mf,false); mfi.isValid(); ++mfi) {
+                Box isect = terrain_fab_prv.box() & (*prv_mf)[mfi].box();
+                (*prv_mf)[mfi].template copy<RunOn::Device>(terrain_fab_prv,isect,0,isect,0,1);
+            }
+            make_terrain_fitted_coords(lev,fine_geom,*prv_mf, zlevels_stag[lev], phys_bc_type);
+        }
+
         Real inv_dt   = one/dtau;
 
         z_t_pert = std::make_unique<MultiFab>(S_data[IntVars::zmom].boxArray(), S_data[IntVars::zmom].DistributionMap(), 1, 1);
@@ -279,15 +334,23 @@
 
             const Array4<Real const>& z_nd_new_arr =  z_phys_nd_new[lev]->const_array(mfi);
             const Array4<Real const>& z_nd_old_arr =  z_phys_nd[lev]->const_array(mfi);
+            const Array4<Real const>& z_nd_prv_arr =  prv_mf ? prv_mf->const_array(mfi) : z_nd_old_arr;
+            // The pair differenced below: (old,new) across this sub-step, or (prev,old) over the
+            // preceding one when the grid velocity is sampled at the sub-step start.
+            const Array4<Real const>& z_nd_lo_arr  =  l_lagged_zt ? z_nd_prv_arr : z_nd_old_arr;
+            const Array4<Real const>& z_nd_ref_arr =  l_lagged_zt ? z_nd_old_arr : z_nd_new_arr;
 
             // Loop over horizontal plane
             amrex::ParallelFor(gbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                // Evaluate between RK stages assuming the geometry is linear between old and new time
-                zp_t_arr(i,j,k) = fourth * inv_dt * (z_nd_new_arr(i+1,j+1,k) - z_nd_old_arr(i+1,j+1,k)
-                                                  +z_nd_new_arr(i  ,j+1,k) - z_nd_old_arr(  i,j+1,k)
-                                                  +z_nd_new_arr(i+1,j  ,k) - z_nd_old_arr(i+1,j  ,k)
-                                                  +z_nd_new_arr(i  ,j  ,k) - z_nd_old_arr(i  ,j  ,k));
+                // Grid velocity across this sub-step: the discrete displacement rate, for which
+                // d(zt)/dzeta = (J^{m+1}-J^m)/dtau holds identically.  With IntervalStart
+                // sampling the rate over the PRECEDING interval is used instead, which breaks
+                // that identity at O(dtau).
+                zp_t_arr(i,j,k) = fourth * inv_dt * (z_nd_ref_arr(i+1,j+1,k) - z_nd_lo_arr(i+1,j+1,k)
+                                                  +z_nd_ref_arr(i  ,j+1,k) - z_nd_lo_arr(  i,j+1,k)
+                                                  +z_nd_ref_arr(i+1,j  ,k) - z_nd_lo_arr(i+1,j  ,k)
+                                                  +z_nd_ref_arr(i  ,j  ,k) - z_nd_lo_arr(i  ,j  ,k));
                 // Convert to perturbation: z"_t(t) = z_t(t) - z_t^{RK}
                 zp_t_arr(i,j,k) -= z_t_arr(i,j,k);
             });
