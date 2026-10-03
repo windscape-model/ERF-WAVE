@@ -186,6 +186,10 @@ Set build variables in the ``GNUmakefile``:
         - Enables support for Lagrangian particles
         - FALSE
         - TRUE/FALSE
+      * - ``USE_TERRAIN_VELOCITY``
+        - Sets the velocity of a no-slip lower wall to the orbital velocity of the moving sine-wave terrain; adds ``.TV`` to the executable name
+        - FALSE
+        - TRUE/FALSE
       * - ``USE_NOAHMP``
         - Enables Noah-MP land surface model (requires ``USE_NETCDF=TRUE``)
         - FALSE
@@ -546,6 +550,10 @@ CMake can also generate makefiles for the Ninja build system for faster compilat
      - ON/OFF
    * - ``ERF_ENABLE_PARTICLES``
      - Enables support for Lagrangian particles
+     - OFF
+     - ON/OFF
+   * - ``ERF_ENABLE_TERRAIN_VELOCITY``
+     - Sets the velocity of a no-slip lower wall to the orbital velocity of the moving sine-wave terrain
      - OFF
      - ON/OFF
    * - ``ERF_PRECISION``
