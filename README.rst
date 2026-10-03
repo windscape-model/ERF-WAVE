@@ -1,6 +1,13 @@
 Energy Research and Forecasting (ERF): An atmospheric modeling code
 ----
 
+This repository is a fork of ERF (https://github.com/erf-model/ERF), based on upstream
+commit 3b886ecc. It adds a lower boundary that moves with an ocean-wave surface (moving
+fitted mesh, wave-surface velocity condition, and wave drag in the surface layer) for
+simulations of wind over waves; see ``Exec/CanonicalTests/WindOverWaves``. The coupled
+atmosphere-wave model WINDSCAPE (https://github.com/windscape-model/WindSCAPE) uses this
+code. The rest of this README is the upstream text.
+
 `ERF` is built upon the `AMReX <https://amrex-codes.github.io/amrex/>`_ software framework
 for massively parallel block-structured applications.
 
