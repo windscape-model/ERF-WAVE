@@ -201,7 +201,7 @@ init_my_custom_terrain ( const Geometry& geom,
                 int ii = domlo_x + ( ((i - domlo_x) % nper) + nper ) % nper;
 
                 // Location of nodes
-                Real x = ii  * dx[0];
+                Real x = ProbLoArr[0] + ii * dx[0];
 
                 // Wave height
                 Real height = wave.a * std::sin(wave.k * x - wave.omega * time);
@@ -219,7 +219,7 @@ init_my_custom_terrain ( const Geometry& geom,
             ParallelFor(zbx, [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
                 int ii = domlo_x + ( ((i - domlo_x) % nper) + nper ) % nper;
-                Real x = ii  * dx[0];
+                Real x = ProbLoArr[0] + ii * dx[0];
                 z_arr(i,j,0) = wave.a * std::sin(wave.k * x) * (one - std::cos(wave.omega * time));
             });
 
@@ -233,7 +233,7 @@ init_my_custom_terrain ( const Geometry& geom,
             ParallelFor(zbx, [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
                 int ii = domlo_x + ( ((i - domlo_x) % nper) + nper ) % nper;
-                Real x = ii  * dx[0];
+                Real x = ProbLoArr[0] + ii * dx[0];
                 z_arr(i,j,0) = wave.a * rampf * std::sin(wave.k * x - wave.omega * time);
             });
 

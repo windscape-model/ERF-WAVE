@@ -64,8 +64,13 @@ public:
       pp.query("most.wave_drag", m_wave_drag);
       if (m_wave_drag) {
           m_wave = MovingWave::from_inputs();
-          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(a_terrain_type == TerrainType::MovingFittedMesh,
-              "erf.most.wave_drag requires erf.terrain_type = MovingFittedMesh");
+          std::string terrain_shape{"None"};
+          amrex::ParmParse pp_prob("prob");
+          pp_prob.query("custom_terrain_type", terrain_shape);
+          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(a_terrain_type == TerrainType::MovingFittedMesh &&
+                                           terrain_shape == "MovingSineWaveRamp",
+              "erf.most.wave_drag requires erf.terrain_type = MovingFittedMesh and "
+              "prob.custom_terrain_type = MovingSineWaveRamp");
           // The drag is already tangent to the surface, so the MOST stress must not be rotated
           AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!use_rot_surface_flux,
               "erf.most.wave_drag requires erf.use_rotate_surface_flux = false");
