@@ -116,6 +116,10 @@ List of Parameters
 | **zhi.type**  | boundary type of zhi face       |                   | must be set if not periodic|
 +---------------+---------------------------------+-------------------+----------------------------+
 
+In a periodic direction, the face velocity on the periodic boundary is stored twice, at both ends
+of the domain. Every **erf.face_sync_int** time steps (integer, default 1), ERF makes the two
+copies equal; 0 switches this off.
+
 
 Resolution
 ==========
@@ -1545,6 +1549,12 @@ List of Parameters
 +----------------------------+----------------------------------+-------------------+-------------+
 | **erf.beta_s**             | Time off-centering coefficient   | Real              | 0.1         |
 +----------------------------+----------------------------------+-------------------+-------------+
+| **erf.beta_d**             | Divergence damping coefficient;  | Real              | -1          |
+|                            | a negative value selects 0.1, or |                   |             |
+|                            | 0 with midpoint metric terms on  |                   |             |
+|                            | a moving mesh and                |                   |             |
+|                            | ``erf.beta_s = 0``               |                   |             |
++----------------------------+----------------------------------+-------------------+-------------+
 | **erf.w_damping**          | Enable vertical-velocity         | Bool              | false       |
 |                            | damping                          |                   |             |
 +----------------------------+----------------------------------+-------------------+-------------+
@@ -1844,6 +1854,36 @@ Examples of Usage
     the y-coordinate, then the (nx times ny) values of the z-coordinate associated
     with the (x,y) values we have just read in.  Note that the z-values are in the
     order z(x1,y1), z(x1,y2), z(x1,y3), ... which is contrary to standard Fortran ordering
+
+Moving Terrain
+--------------
+
+With **erf.terrain_type = MovingFittedMesh**, the following inputs set the evaluation times of the
+moving-mesh geometry in the acoustic sub-steps. The defaults give the moving-mesh scheme; the
+other values are for tests of its conditions. Examples are in ``Exec/CanonicalTests/WindOverWaves``.
+
++---------------------------------+-----------------------------------+-----------------------+----------------------+
+| Parameter                       | Definition                        | Acceptable Values     | Default              |
++=================================+===================================+=======================+======================+
+| **erf.substep_metric_sampling** | time of the metric terms of the   | Midpoint, Endpoint    | Midpoint with        |
+|                                 | pressure gradient and of the      |                       | MovingFittedMesh,    |
+|                                 | operator Jacobians: sub-step      |                       | else Endpoint        |
+|                                 | midpoint or sub-step start        |                       |                      |
++---------------------------------+-----------------------------------+-----------------------+----------------------+
+| **erf.grid_velocity_sampling**  | grid velocity: displacement over  | DiscreteDisplacement, | DiscreteDisplacement |
+|                                 | the sub-step (discrete geometric  | IntervalStart         |                      |
+|                                 | conservation law) or rate over    |                       |                      |
+|                                 | the preceding interval            |                       |                      |
++---------------------------------+-----------------------------------+-----------------------+----------------------+
+| **erf.slow_geometry_time**      | mesh of the slow tendency of an   | StageTime, StepStart  | StageTime            |
+|                                 | RK stage: mesh at the stage time  |                       |                      |
+|                                 | or at the step start              |                       |                      |
++---------------------------------+-----------------------------------+-----------------------+----------------------+
+| **erf.substep_volume_sampling** | cell volume of the sub-step-start | Endpoint, Midpoint    | Endpoint             |
+|                                 | state in the conservative update: |                       |                      |
+|                                 | sub-step-start volume or mean of  |                       |                      |
+|                                 | the start and end volumes         |                       |                      |
++---------------------------------+-----------------------------------+-----------------------+----------------------+
 
 Land Surface Model
 ==================

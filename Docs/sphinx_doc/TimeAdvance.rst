@@ -157,5 +157,7 @@ to control horizontally propagating sound waves.
 where :math:`\tau*` is the forward projected value used in RHS of the acoustic
 substepping equations for horizontal momentum. According to Skamarock et al,
 this is equivalent to including a horizontal diffusion term in the continuity
-equation. A typical damping coefficient of :math:`\beta_d = 0.1` is used, as in
-WRF.
+equation. The coefficient is set with ``erf.beta_d``. Its default is the typical value
+:math:`\beta_d = 0.1`, as in WRF. On a moving mesh with the metric terms at the sub-step midpoint
+(``erf.substep_metric_sampling = Midpoint``, the default with ``erf.terrain_type = MovingFittedMesh``)
+and no off-centering (``erf.beta_s = 0``), the default is :math:`\beta_d = 0`.

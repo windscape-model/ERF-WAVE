@@ -251,3 +251,35 @@ where :math:`w_*` is the (Deardorff) convective velocity scale and
    V_{sg} = 0.32 \left(\frac{\Delta x}{5000} - 1 \right)^{0.33}
 
 which vanishes for grid spacings of :math:`\Delta x < 5` km.
+
+Wave drag
+~~~~~~~~~
+Over the moving sine-wave surface ``prob.custom_terrain_type = MovingSineWaveRamp`` (with
+``erf.terrain_type = MovingFittedMesh``), the surface stress can be computed from the wind relative
+to the orbital velocity of the surface (Zhu et al. 2023, Mon. Wea. Rev. 151, Eqs. 26-29):
+
+.. math::
+
+   \tau_{13} = -\rho\, C_d\, |\mathbf{u}_r|\, u_\parallel, \qquad
+   \tau_{23} = -\rho\, C_d\, |\mathbf{u}_r|\, v_\parallel, \qquad
+   C_d = \left[ \frac{\kappa}{\ln(z_{ref}/z_0)} \right]^2,
+
+where :math:`\mathbf{u}_r` is the velocity relative to the orbital velocity of the surface and
+:math:`u_\parallel`, :math:`v_\parallel` are its components tangent to the surface. The wave is
+given by ``prob.Ampl``, ``prob.wavelength`` and ``prob.wave_c``. With the stability option,
+:math:`C_d` and the surface heat flux follow from the Monin-Obukhov relations at each point along
+the wave (Sullivan et al. 2014, J. Atmos. Sci. 71), with the stability functions of
+Large et al. (1994). The inputs are
+
+::
+
+   erf.most.wave_drag                = BOOL    #WAVE DRAG ON? (default false)
+   erf.most.wave_drag_stability      = INT     #1: STABILITY FUNCTIONS AND HEAT FLUX (default 0)
+   erf.most.wave_drag_theta_mode     = STRING  #flux OR surface_temp (default flux)
+   erf.most.wave_drag_surf_flux      = FLOAT   #KINEMATIC SURFACE HEAT FLUX, flux MODE [K-m/s]
+   erf.most.wave_drag_surf_temp      = FLOAT   #SURFACE POTENTIAL TEMP AT t = 0, surface_temp MODE [K]
+   erf.most.wave_drag_surf_temp_rate = FLOAT   #RATE OF CHANGE OF THE SURFACE TEMP [K/s]
+   erf.most.wave_drag_z0h            = FLOAT   #THERMAL ROUGHNESS [m]; NEGATIVE SELECTS z0 (default -1)
+
+The wave drag uses ``erf.most.z0`` and ``erf.most.zref``, and requires ``zlo.type = "surface_layer"``
+and ``erf.use_rotate_surface_flux = false``.
