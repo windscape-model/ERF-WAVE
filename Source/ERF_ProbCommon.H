@@ -9,6 +9,7 @@
 #include "ERF_DataStruct.H"
 #include "ERF_EOS.H"
 #include "ERF_HSEUtils.H"
+#include "ERF_MovingWave.H"
 #include "ERF_TileNoZ.H"
 
 struct ProbParmDefaults {
@@ -654,7 +655,6 @@ public:
             }
         }
     }
-
 
     /**
      * Function to define the quantities needed to impose Rayleigh damping

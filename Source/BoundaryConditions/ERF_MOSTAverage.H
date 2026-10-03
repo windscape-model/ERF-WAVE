@@ -61,13 +61,11 @@ public:
     void set_region_normalization (const int& /*lev*/)
     {m_ncell_region = (2 * m_radius + 1) * (2 * m_radius + 1) * (2 * m_radius + 1);}
 
-    // Populate a 2D iMF k_indx (w/o terrain)
-    // Rebuild the geometry-dependent reference-height maps (positions/indices and
-    // normalization) from the CURRENT contents of z_phys_nd. Needed after a checkpoint
-    // restart (the constructor ran before the checkpoint terrain was loaded) and on a
-    // moving mesh (so the reference height tracks the instantaneous surface).
+    // Set the reference-height maps (positions or indices) and the normalization from the
+    // current z_phys_nd; called again after a restart and on a moving mesh
     void update_geometry_maps (const int& lev);
 
+    // Populate a 2D iMF k_indx (w/o terrain)
     void set_k_indices_N (const int& lev);
 
     // Populate a 2D iMF k_indx (for EB)

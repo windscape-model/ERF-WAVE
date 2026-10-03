@@ -12,6 +12,7 @@
 #include "ERF_Constants.H"
 #include "ERF_MOSTAverage.H"
 #include "ERF_MOSTStress.H"
+#include "ERF_MovingWave.H"
 #include "ERF_TerrainMetrics.H"
 #include "ERF_PBLHeight.H"
 #include "ERF_MicrophysicsUtils.H"
@@ -58,47 +59,36 @@ public:
       amrex::ParmParse pp("erf");
       pp.query("most.z0", z0_const);
 
-      // ---- Relative-velocity wave drag (Zhu et al. 2023, Eqs 26-29) -- OPT-IN, default OFF ----
-      // When off, nothing below changes and the standard MOST stress runs unchanged.
+      // Wave drag: stress from the wind relative to the orbital velocity of the moving wave
+      // surface (Zhu et al. 2023, Mon. Wea. Rev. 151, Eqs. 26-29), see ERF_MOSTWaveDrag.H
       pp.query("most.wave_drag", m_wave_drag);
       if (m_wave_drag) {
-          // Single source of truth for the wave: the SAME prob.* the moving terrain
-          // (ERF_InitCustomTerrain.cpp "MovingSineWaveRamp") and the orbital-u_w BC
-          // (ERF_BoundaryConditionsXvel.cpp) read, so u_wave cannot drift from the moving mesh.
-          amrex::ParmParse pp_prob("prob");
-          pp_prob.query("Ampl", m_wave_ampl);
-          pp_prob.query("wavelength", m_wave_length);
-          pp_prob.query("wave_c", m_wave_c);
-          // Guardrails (point 4 of the design): the drag is only meaningful on the moving wavy
-          // surface, and Eq 27 ALREADY projects onto the surface tangent -- so it must NOT also be
-          // run through the MOST rotate path (that would double-count the slope).
+          m_wave = MovingWave::from_inputs();
           AMREX_ALWAYS_ASSERT_WITH_MESSAGE(a_terrain_type == TerrainType::MovingFittedMesh,
               "erf.most.wave_drag requires erf.terrain_type = MovingFittedMesh");
+          // The drag is already tangent to the surface, so the MOST stress must not be rotated
           AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!use_rot_surface_flux,
-              "erf.most.wave_drag is incompatible with the MOST rotate path: Eq 27 already projects "
-              "the stress onto the wave surface, so do NOT enable use_rotate_surface_flux here.");
+              "erf.most.wave_drag requires erf.use_rotate_surface_flux = false");
 
-          // ---- Gated stability extension (default OFF; bit-identical when off) ----
-          // Point-by-point Monin-Obukhov corrections + surface heat flux over the wave,
-          // following Sullivan et al. (2014, JAS, appendix) with the Large et al. (1994)
-          // stability functions (see ERF_MOSTWaveDrag.H).
+          // Optional stability functions and surface heat flux, evaluated point by point along
+          // the wave (Sullivan et al. 2014, J. Atmos. Sci. 71, appendix)
           pp.query("most.wave_drag_stability", m_wd_stability);
           if (m_wd_stability) {
               std::string mode_string{"flux"};
               pp.query("most.wave_drag_theta_mode", mode_string);
               if (mode_string == "flux") {
                   m_wd_theta_mode = 0;
-                  pp.query("most.wave_drag_surf_flux", m_wd_surf_flux);  // <w'th'> [K m/s]
+                  pp.query("most.wave_drag_surf_flux", m_wd_surf_flux);
               } else if (mode_string == "surface_temp") {
                   m_wd_theta_mode = 1;
-                  pp.query("most.wave_drag_surf_temp", m_wd_surf_temp);        // theta_s(0) [K]
-                  pp.query("most.wave_drag_surf_temp_rate", m_wd_surf_temp_rate); // d(theta_s)/dt [K/s]
+                  pp.query("most.wave_drag_surf_temp", m_wd_surf_temp);
+                  pp.query("most.wave_drag_surf_temp_rate", m_wd_surf_temp_rate);
                   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(m_wd_surf_temp > amrex::Real(0.0),
                       "erf.most.wave_drag_theta_mode = surface_temp requires erf.most.wave_drag_surf_temp");
               } else {
                   amrex::Abort("erf.most.wave_drag_theta_mode must be 'flux' or 'surface_temp'");
               }
-              pp.query("most.wave_drag_z0h", m_wd_z0h);  // thermal roughness; < 0 -> use z0
+              pp.query("most.wave_drag_z0h", m_wd_z0h);
           }
       }
 
@@ -529,12 +519,6 @@ public:
                        const FluxIter& most_flux,
                        bool is_land);
 
-  // Local relative-velocity wave-drag path (Zhu et al. 2023, Eqs 26-29). Called from
-  // update_fluxes only when erf.most.wave_drag=1; sets diagnostic MOST fields and skips the
-  // MOST plane average (the momentum stress is filled locally in compute_SurfaceLayer_bcs).
-  void compute_fluxes_wavedrag (const int& lev,
-                                amrex::MultiFab& cons_in);
-
   void init_tke_from_ustar (const int& lev,
                             amrex::MultiFab& cons,
                             const std::unique_ptr<amrex::MultiFab>& z_phys_nd,
@@ -652,18 +636,15 @@ public:
   }
 
   amrex::MultiFab* get_t_surf (const int& lev) { return t_surf[lev].get(); }
-
-  // Rebuild the MOST reference-height maps from the current terrain (checkpoint restart
-  // and moving-mesh support).
-  void update_surface_geometry (const int& lev) { m_ma.update_geometry_maps(lev); }
   void set_t_surf(const int& lev, const amrex::Real tsurf) { t_surf[lev]->setVal(tsurf); }
 
   amrex::MultiFab* get_q_surf (const int& lev) { return q_surf[lev].get(); }
   void set_q_surf(const int& lev, const amrex::Real qsurf) { q_surf[lev]->setVal(qsurf); }
 
-  // Refine the wave phase used by the wave-drag stress to the CURRENT RK/MRI stage
-  // time (audit 2026-07-05 D7-8: m_time was frozen at step start for all stages, an
-  // O(dt) phase lag in the slow drag tendency). Only the wave-drag kernels read m_time.
+  // Rebuild the reference-height maps of the MOST averages from the current terrain
+  void update_surface_geometry (const int& lev) { m_ma.update_geometry_maps(lev); }
+
+  // Time of the wave phase in the wave drag; the slow tendency of each stage sets its stage time
   void set_drag_time (amrex::Real a_time) { m_time = a_time; }
 
   amrex::Real get_zref (const int& lev) { return (m_ma.get_zref(lev))->min(0); }
@@ -745,21 +726,16 @@ private:
   amrex::Vector<amrex::Geometry> m_geom;
   bool m_rotate = false;
 
-  // Relative-velocity wave drag (Zhu et al. 2023, Eqs 26-29; ERF_MOSTWaveDrag.H). Opt-in MOST wall
-  // model for the turbulent ABL over a moving wave. Default OFF -> standard MOST, all other cases
-  // byte-identical. Wave params mirror the moving terrain (prob.Ampl/prob.wavelength).
+  // Wave drag (see the constructor)
   bool        m_wave_drag = false;
-  amrex::Real m_wave_ampl = amrex::Real(0.0);
-  amrex::Real m_wave_length = amrex::Real(100.0);
-  amrex::Real m_wave_c = amrex::Real(0.0);      // prob.wave_c: prescribed phase speed (0 = deep-water dispersion)
-  // Gated stability extension of the wave-drag path (erf.most.wave_drag_stability):
-  int         m_wd_stability      = 0;                     // master gate, default OFF
-  int         m_wd_theta_mode     = 0;                     // 0 = prescribed flux, 1 = surface temperature
-  amrex::Real m_wd_surf_flux      = amrex::Real(0.0);      // <w'th'> [K m/s]
-  amrex::Real m_wd_surf_temp      = amrex::Real(-1.0);     // theta_s at t = 0 [K]
-  amrex::Real m_wd_surf_temp_rate = amrex::Real(0.0);      // d(theta_s)/dt [K/s]
-  amrex::Real m_wd_z0h            = amrex::Real(-1.0);     // thermal roughness; < 0 -> use z0
-  amrex::Real m_time = amrex::Real(0.0);   // current step time, set in update_fluxes, used by the drag
+  MovingWave  m_wave;
+  int         m_wd_stability      = 0;
+  int         m_wd_theta_mode     = 0;                  // 0: surface heat flux, 1: surface temperature
+  amrex::Real m_wd_surf_flux      = amrex::Real(0.0);   // kinematic surface heat flux [K m/s]
+  amrex::Real m_wd_surf_temp      = amrex::Real(-1.0);  // surface potential temperature at t = 0 [K]
+  amrex::Real m_wd_surf_temp_rate = amrex::Real(0.0);   // rate of change of the surface temperature [K/s]
+  amrex::Real m_wd_z0h            = amrex::Real(-1.0);  // thermal roughness; < 0 selects z0
+  amrex::Real m_time              = amrex::Real(0.0);   // time of the wave phase
 
   amrex::Real m_start_low_time;
   amrex::Real m_final_low_time;

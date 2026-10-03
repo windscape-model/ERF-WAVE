@@ -17,10 +17,6 @@ SurfaceLayer::update_fluxes (const int& lev,
                              const std::unique_ptr<MultiFab>& walldist,
                              int max_iters)
 {
-    // Stash the current step time for the relative-velocity wave drag (u_wave(x,t) phase).
-    // MOST fluxes are computed once per step and held, so this matches the moving terrain at t^n.
-    m_time = elapsed_time_since_start_low;
-
     // Update with SST/TSK data if we have a valid pointer
     if (!m_sst_lev[lev].empty() && m_sst_lev[lev][0]) {
         fill_tsurf_with_sst_and_tsk(lev, elapsed_time_since_start_low);
@@ -42,15 +38,15 @@ SurfaceLayer::update_fluxes (const int& lev,
     // Fill interior ghost cells
     t_surf[lev]->FillBoundary(m_geom[lev].periodicity());
 
-    // ---- Relative-velocity wave drag (Zhu et al. 2023, Eqs 26-29): purely LOCAL path ----
-    // The surface momentum stress is a local function of the cell velocities + wave kinematics
-    // (WaveDrag::compute_wave_drag_u/v, applied in compute_SurfaceLayer_bcs). It needs NO MOST
-    // plane/region average, so we skip compute_averages() entirely here -- that averaging runs a
-    // "reference height above terrain" search (ERF_MOSTAverage.H) that aborts once the ramped wave
-    // crest rises above z_ref. Only set the diagnostic MOST fields; the momentum BC is the drag.
-    // Gated on erf.most.wave_drag=1 (default OFF); when off this branch is not taken and the rest
-    // of update_fluxes is byte-identical.
-    if (m_wave_drag) { compute_fluxes_wavedrag(lev, cons_in); return; }
+    // The wave drag is local (compute_SurfaceLayer_bcs) and needs no MOST averages; the MOST
+    // fields are only set to neutral values
+    if (m_wave_drag) {
+        u_star[lev]->setVal(zero);
+        t_star[lev]->setVal(zero);
+        q_star[lev]->setVal(zero);
+        olen[lev]->setVal(amrex::Real(1.0e16));
+        return;
+    }
 
     // Compute plane averages for all vars (regardless of flux type)
     m_ma.compute_averages(lev);
@@ -314,36 +310,6 @@ SurfaceLayer::compute_fluxes (const int& lev,
 }
 
 /**
- * Local relative-velocity wave-drag path (Zhu et al. 2023, Eqs 26-29; ERF_MOSTWaveDrag.H).
- *
- * Called from update_fluxes ONLY when erf.most.wave_drag=1 (MovingFittedMesh + surface_layer).
- * The surface momentum stress in this case is purely LOCAL -- it is built from the cell
- * velocities and the wave kinematics in WaveDrag::compute_wave_drag_u/v, which is applied in
- * compute_SurfaceLayer_bcs (the l_wave_drag branches that fill Tau). It does NOT use any MOST
- * plane/region average, so we deliberately do NOT call m_ma.compute_averages() (its z_ref
- * "height above terrain" search aborts once the ramped wave crest rises above z_ref) and we
- * do NOT run the MOST flux iteration. The derived MOST fields (u*, t*, q*, L) are diagnostic
- * only on this path: the momentum BC is the drag, and the wave case is adiabatic so the heat
- * flux is zero (compute_t_flux returns 0 when t* == 0). Set them to neutral, sane values.
- *
- * NOTE: this method only has cons_in; Tau/velocity/heat-flux MultiFabs are arguments to
- *       impose_SurfaceLayer_bcs (not members) and are filled later in compute_SurfaceLayer_bcs.
- */
-void
-SurfaceLayer::compute_fluxes_wavedrag (const int& lev,
-                                       MultiFab& cons_in)
-{
-    amrex::ignore_unused(cons_in);
-
-    // Diagnostic-only on the wave-drag path (no MOST average is computed here).
-    u_star[lev]->setVal(zero);            // friction velocity: diagnostic only in the drag path
-    t_star[lev]->setVal(zero);            // neutral -> compute_t_flux == 0 (adiabatic wave)
-    q_star[lev]->setVal(zero);            // dry
-    olen[lev]->setVal(amrex::Real(1.0e16)); // neutral Obukhov length
-}
-
-
-/**
  * Wrapper to impose Monin Obukhov similarity theory fluxes by populating ghost cells.
  *
  * @param[in] lev Current level
@@ -459,24 +425,15 @@ SurfaceLayer::compute_SurfaceLayer_bcs (const int& lev,
     const int klo = m_geom[lev].Domain().smallEnd(2);
     const auto& dxInv = m_geom[lev].InvCellSizeArray();
 
-    // ---- Relative-velocity wave-drag constants (Zhu et al. 2023, Eqs 26-29; ERF_MOSTWaveDrag.H) ----
-    // Captured by the t13/t23 lambdas below. Wave (a,k,omega) mirror MovingSineWaveRamp; Cd uses the
-    // SAME MOST reference height (get_zref = first cell-center ht, paper's Dz/2) and z0 as the rest of
-    // MOST. NB ERF's KAPPA=0.41 (paper/WRF used 0.40). All inert unless erf.most.wave_drag=1.
+    // Wave drag: neutral drag coefficient from the MOST reference height and z0
     const bool l_wave_drag = m_wave_drag;
+    const MovingWave l_wave = m_wave;
     const Real l_time      = m_time;
-    const Real l_a         = m_wave_ampl;
-    const Real l_kw        = (m_wave_length > Real(0.0)) ? Real(2.0)*PI/m_wave_length : Real(0.0);
-    const Real l_omega     = (m_wave_c > Real(0.0)) ? m_wave_c * l_kw : std::sqrt(CONST_GRAV * l_kw);
     const Real l_zref      = l_wave_drag ? get_zref(lev) : Real(1.0);
     const Real l_Cd        = l_wave_drag ? std::pow(KAPPA/std::log(l_zref/z0_const), 2) : Real(0.0);
     const Real l_problo_x  = m_geom[lev].ProbLo(0);
     const Real l_dx0       = m_geom[lev].CellSize(0);
 
-    // Gated stability extension of the drag path (erf.most.wave_drag_stability=1, default
-    // OFF): point-by-point Monin-Obukhov corrections + surface heat flux over the wave
-    // (Sullivan et al. 2014 practice; ERF_MOSTWaveDrag.H). When off, l_wd_stab is false,
-    // every branch below takes its existing arm, and all cases are bit-identical.
     const bool l_wd_stab = l_wave_drag && (m_wd_stability != 0);
     WaveDrag::StabParams l_sp;
     l_sp.mode    = m_wd_theta_mode;
@@ -565,11 +522,9 @@ SurfaceLayer::compute_SurfaceLayer_bcs (const int& lev,
             Real Tflux;
             int is_land = (lmask_arr) ? lmask_arr(i,j,0) : 1;
             if (l_wd_stab) {
-                // Stability-gated wave path: local point-by-point heat flux over the
-                // moving wave (cell center sits at x = problo + (i+1/2) dx).
                 Tflux = WaveDrag::compute_wave_t_flux(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
                                                       l_problo_x + (i+Real(0.5))*l_dx0, l_time,
-                                                      l_a, l_kw, l_omega, l_sp);
+                                                      l_wave, l_sp);
             } else if (lsm_t_flux_arr && is_land) {
                 Tflux = lsm_t_flux_arr(i,j,0);
             } else {
@@ -627,15 +582,9 @@ SurfaceLayer::compute_SurfaceLayer_bcs (const int& lev,
                 int is_land_hi = (lmask_arr) ? lmask_arr(i  ,j,0) : 1;
                 int is_land_lo = (lmask_arr) ? lmask_arr(i-1,j,0) : 1;
                 if (l_wave_drag) {
-                    // Relative-velocity drag over the moving wave (Zhu Eqs 26-29). Takes precedence:
-                    // this is the ocean wall model, no land/LSM in the wave case.
-                    stressx = (l_wd_stab)
-                      ? WaveDrag::compute_wave_drag_u_stab(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
-                                                           l_problo_x + i*l_dx0, l_time,
-                                                           l_a, l_kw, l_omega, l_sp)
-                      : WaveDrag::compute_wave_drag_u(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
-                                                      l_problo_x + i*l_dx0, l_time,
-                                                      l_a, l_kw, l_omega, l_Cd);
+                    stressx = WaveDrag::compute_wave_drag_u(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
+                                                            l_problo_x + i*l_dx0, l_time,
+                                                            l_wave, l_Cd, l_wd_stab, l_sp);
                 } else if (lsm_tau13_arr && (is_land_hi || is_land_lo)) {
                     stressx = zero;
                     if (!is_land_hi || !is_land_lo) {
@@ -669,14 +618,9 @@ SurfaceLayer::compute_SurfaceLayer_bcs (const int& lev,
                 int is_land_hi = (lmask_arr) ? lmask_arr(i,j  ,0) : 1;
                 int is_land_lo = (lmask_arr) ? lmask_arr(i,j-1,0) : 1;
                 if (l_wave_drag) {
-                    // v-node sits at x = problo + (i+1/2) dx (cell center in x)
-                    stressy = (l_wd_stab)
-                      ? WaveDrag::compute_wave_drag_v_stab(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
-                                                           l_problo_x + (i+Real(0.5))*l_dx0, l_time,
-                                                           l_a, l_kw, l_omega, l_sp)
-                      : WaveDrag::compute_wave_drag_v(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
-                                                      l_problo_x + (i+Real(0.5))*l_dx0, l_time,
-                                                      l_a, l_kw, l_omega, l_Cd);
+                    stressy = WaveDrag::compute_wave_drag_v(i, j, k, cons_arr, velx_arr, vely_arr, velz_arr,
+                                                            l_problo_x + (i+Real(0.5))*l_dx0, l_time,
+                                                            l_wave, l_Cd, l_wd_stab, l_sp);
                 } else if (lsm_tau23_arr && (is_land_hi || is_land_lo)) {
                     stressy = zero;
                     if (!is_land_hi || !is_land_lo) {

@@ -106,15 +106,12 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
                     Qr_prim[lev]->setVal(0);
                 }
             }
-            // NOTE: std::swap above causes the field ptrs to be out of date.
-            //       Reassign the field ptrs for MAC avg computation.
-            // On a moving mesh, rebuild the geometry-dependent reference-height maps so
-            // they track the instantaneous surface (they are otherwise frozen at the
-            // construction-time terrain, and a restarted run would rebuild them from a
-            // different mesh than an uninterrupted run did).
+            // On a moving mesh the reference heights follow the surface
             if (solverChoice.terrain_type == TerrainType::MovingFittedMesh) {
                 m_SurfaceLayer->update_surface_geometry(lev);
             }
+            // NOTE: std::swap above causes the field ptrs to be out of date.
+            //       Reassign the field ptrs for MAC avg computation.
             m_SurfaceLayer->update_mac_ptrs(lev, vars_old, Theta_prim, Qv_prim, Qr_prim);
             m_SurfaceLayer->update_pblh(lev, vars_old, z_phys_cc[lev].get(),
                                         solverChoice.moisture_indices);
@@ -126,7 +123,6 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
 #endif
             m_SurfaceLayer->update_fluxes(lev, elapsed_time_since_start_low,
                                           S_old, z_phys_nd[lev], walldist[lev]);
-
         }
     }
 
@@ -155,6 +151,7 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
         // Get SFC fluxes from SurfaceLayer
         if (m_SurfaceLayer) {
             Vector<const MultiFab*> mfs = {&S_old, &U_old, &V_old, &W_old};
+            m_SurfaceLayer->set_drag_time(time);
             m_SurfaceLayer->impose_SurfaceLayer_bcs(lev, mfs, Tau[lev],
                                                     SFS_hfx1_lev[lev].get() , SFS_hfx2_lev[lev].get() , SFS_hfx3_lev[lev].get(),
                                                     SFS_q1fx1_lev[lev].get(), SFS_q1fx2_lev[lev].get(), SFS_q1fx3_lev[lev].get(),
@@ -386,15 +383,7 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
         Time_Avg_Vel_atCC(dt[lev], t_avg_cnt[lev], vel_t_avg[lev].get(), U_new, V_new, W_new);
     }
 
-    // ***********************************************************************************************
-    // Re-synchronize the duplicated periodic wrap-face velocity DOFs (seam-point fix,
-    // 2026-07-08). The init-time OverrideSync (ERF::init syncs faces once) is not enough:
-    // the two valid copies of each wrap face are updated independently every step and
-    // decorrelate to O(1e-2) m/s within ~1500 s (measured from checkpoints), forming a
-    // spurious velocity discontinuity at the seam that nucleates the corner blow-up.
-    // The velocities are the carried state (momenta are rebuilt from them at step entry),
-    // so syncing the three face velocities here makes the wrap DOFs consistent.
-    // ***********************************************************************************************
+    // A periodic face velocity is stored twice, at both ends of the domain; make the two copies equal
     if (solverChoice.face_sync_int > 0 && (istep[lev] % solverChoice.face_sync_int == 0)
         && geom[lev].isAnyPeriodic())
     {

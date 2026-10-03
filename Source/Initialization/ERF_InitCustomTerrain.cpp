@@ -4,6 +4,7 @@
 
 #include "AMReX_ParmParse.H"
 #include "ERF_Constants.H"
+#include "ERF_MovingWave.H"
 #include "ERF_TerrainMetrics.H"
 
 using namespace amrex;
@@ -190,21 +191,10 @@ init_my_custom_terrain ( const Geometry& geom,
 
         } else if (custom_terrain_type == "MovingSineWave") {
 
-            Real Ampl        = zero;  pp_prob.query("Ampl", Ampl);
-            Real wavelength  = Real(100.); pp_prob.query("wavelength", wavelength);
+            // Traveling wave h = a sin(kx - omega t)
+            const MovingWave wave = MovingWave::from_inputs();
 
-            Real kp          = two * PI / wavelength;
-            Real g           = CONST_GRAV;
-            Real omega       = std::sqrt(g * kp);
-            // prob.wave_c (m/s, optional): prescribed phase speed, omega = c k, in place of the
-            // deep-water dispersion relation.  The same input is read by the wave-drag surface
-            // layer, the orbital-wall condition and the moving-terrain initializers.
-            Real wave_c      = zero;       pp_prob.query("wave_c", wave_c);
-            if (wave_c > zero) { omega = wave_c * kp; }
-
-            // Exactly periodic in x (audit 2026-07-05 D4-2/D4-4): node domhi_x is the same
-            // DOF as node domlo_x, and ghost nodes take exact periodic images (the clip
-            // used previously left a machine-eps seam mismatch and clamped ghosts).
+            // Node domhi_x is the periodic image of node domlo_x, and ghost nodes take periodic images
             const int nper = domhi_x - domlo_x;
             ParallelFor(zbx, [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
@@ -214,7 +204,7 @@ init_my_custom_terrain ( const Geometry& geom,
                 Real x = ii  * dx[0];
 
                 // Wave height
-                Real height = Ampl * std::sin(kp * x - omega * time);
+                Real height = wave.a * std::sin(wave.k * x - wave.omega * time);
 
                 // Populate terrain height
                 z_arr(i,j,0) = height;
@@ -222,64 +212,29 @@ init_my_custom_terrain ( const Geometry& geom,
 
         } else if (custom_terrain_type == "MovingSineWaveRest") {
 
-            // REST-STARTED standing sine wave: h = Ampl sin(kx) (1 - cos(omega t)).
-            // At t=0:  h=0 (flat) AND z_t = Ampl sin(kx) omega sin(omega t) = 0  -> consistent with a
-            // quiescent (w=0) initial state. Removes the inconsistent-IC startup transient of the
-            // traveling MovingSineWave, so the temporal convergence order is not masked (ingredient vi
-            // for the 2nd-order substepping convergence study; see Docs/ITEM3_phase3_design.md).
-            Real Ampl        = zero;       pp_prob.query("Ampl", Ampl);
-            Real wavelength  = Real(100.); pp_prob.query("wavelength", wavelength);
+            // Standing wave h = a sin(kx) (1 - cos(omega t)), flat and at rest at t = 0
+            const MovingWave wave = MovingWave::from_inputs();
 
-            Real kp          = two * PI / wavelength;
-            Real g           = CONST_GRAV;
-            Real omega       = std::sqrt(g * kp);
-            // prob.wave_c (m/s, optional): prescribed phase speed, omega = c k, in place of the
-            // deep-water dispersion relation.  The same input is read by the wave-drag surface
-            // layer, the orbital-wall condition and the moving-terrain initializers.
-            Real wave_c      = zero;       pp_prob.query("wave_c", wave_c);
-            if (wave_c > zero) { omega = wave_c * kp; }
-
-            const int nper = domhi_x - domlo_x;   // exact x-periodicity (see MovingSineWave)
+            const int nper = domhi_x - domlo_x;
             ParallelFor(zbx, [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
                 int ii = domlo_x + ( ((i - domlo_x) % nper) + nper ) % nper;
                 Real x = ii  * dx[0];
-                Real height = Ampl * std::sin(kp * x) * (one - std::cos(omega * time));
-                z_arr(i,j,0) = height;
+                z_arr(i,j,0) = wave.a * std::sin(wave.k * x) * (one - std::cos(wave.omega * time));
             });
 
         } else if (custom_terrain_type == "MovingSineWaveRamp") {
 
-            // TRAVELING sine wave with amplitude RAMPED from 0 to Ampl:  h = Ampl*r(t)*sin(kx-omega t).
-            // The ramp r(t)=1/2(1-cos(omega t)) for omega*t<pi (=1 thereafter) is IDENTICAL to the
-            // rest-started ramp applied to the orbital tangential velocity in
-            // ERF_BoundaryConditionsXvel.cpp (the TERRAIN_VELOCITY u_w BC). Using the SAME ramp is
-            // essential: it keeps the terrain motion z_t (= a*omega*r(t)*... from d h/dt, derived by
-            // the solver via finite-differencing this surface) CONSISTENT with the boundary u_w, so
-            // both grow together from a quiescent (u=w=0) rest state. r(0)=r'(0)=0 => h=0 AND z_t=0
-            // at t=0, removing the impulsive cold-start shock of the plain MovingSineWave (whose z_t
-            // jumps to a*omega at t=0 while u_w is ramped -> a t=0 mismatch). If you change this ramp
-            // you MUST change the BC ramp identically.
-            Real Ampl        = zero;       pp_prob.query("Ampl", Ampl);
-            Real wavelength  = Real(100.); pp_prob.query("wavelength", wavelength);
+            // Traveling wave h = a R(t) sin(kx - omega t), flat and at rest at t = 0
+            const MovingWave wave = MovingWave::from_inputs();
+            const Real rampf = wave.ramp(time);
 
-            Real kp          = two * PI / wavelength;
-            Real g           = CONST_GRAV;
-            Real omega       = std::sqrt(g * kp);
-            // prob.wave_c (m/s, optional): prescribed phase speed, omega = c k, in place of the
-            // deep-water dispersion relation.  The same input is read by the wave-drag surface
-            // layer, the orbital-wall condition and the moving-terrain initializers.
-            Real wave_c      = zero;       pp_prob.query("wave_c", wave_c);
-            if (wave_c > zero) { omega = wave_c * kp; }
-            Real rampf       = (omega * time < PI) ? Real(0.5) * (one - std::cos(omega * time)) : one;
-
-            const int nper = domhi_x - domlo_x;   // exact x-periodicity (see MovingSineWave)
+            const int nper = domhi_x - domlo_x;
             ParallelFor(zbx, [=] AMREX_GPU_DEVICE (int i, int j, int)
             {
                 int ii = domlo_x + ( ((i - domlo_x) % nper) + nper ) % nper;
                 Real x = ii  * dx[0];
-                Real height = Ampl * rampf * std::sin(kp * x - omega * time);
-                z_arr(i,j,0) = height;
+                z_arr(i,j,0) = wave.a * rampf * std::sin(wave.k * x - wave.omega * time);
             });
 
         } else if (custom_terrain_type == "WindFarmTest") {

@@ -144,6 +144,7 @@ if(ERF_ENABLE_ML_UPHYS_DIAGNOSTICS AND NOT ERF_ENABLE_PARTICLES)
   message(FATAL_ERROR "ERF_ENABLE_ML_UPHYS_DIAGNOSTICS requires particles be enabled")
 endif()
 option(ERF_ENABLE_SHOC "Enable SHOC" OFF)
+option(ERF_ENABLE_TERRAIN_VELOCITY "Enable the orbital velocity of a no-slip moving lower wall" OFF)
 
 #Options for performance
 option(ERF_ENABLE_MPI "Enable MPI" OFF)

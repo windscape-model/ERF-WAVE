@@ -4,7 +4,6 @@
 #include "ERF_GetRhoAlpha.H"
 #include "ERF_GetRhoAlphaForFaces.H"
 
-
 using namespace amrex;
 
 /**
@@ -422,7 +421,6 @@ ImplicitDiffForMomLU_T (const Box& bx,
               b_tmp      = detJface * rhoface - a_tmp - c_tmp;
               inv_b2_tmp = one;
 
-
               RHS_a(i,j,klo)    /= b_tmp;         // NOTE: this is now "rho"
               coeffG_a(i,j,klo)  = c_tmp / b_tmp; // NOTE: this is now "gamma"
           }
@@ -517,7 +515,6 @@ ImplicitDiffForMomLU_T (const Box& bx,
           for (int k(khi-1); k>=klo; --k) {
               soln_a(i,j,k) = RHS_a(i,j,k) - coeffG_a(i,j,k) * soln_a(i,j,k+1);
           }
-
 
           // Convert back to momenta
           //===================================================
