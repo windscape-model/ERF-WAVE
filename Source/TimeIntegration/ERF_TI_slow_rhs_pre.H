@@ -152,10 +152,7 @@
         // *****************************************************************************
         // Define RHS for rho, rho_theta and momenta
         // *****************************************************************************
-        // Stage-consistent wave phase for the MOST wave-drag stress (audit D7-8): the
-        // slow tendency f^S evaluated at the stage state must see the wave at the SAME
-        // time as that state (t^n, then the midpoint for the o2 path / the RK3 stage
-        // times), not the step-start phase for every stage.
+        // Wave phase of the wave drag at the stage time
         if (m_SurfaceLayer) { m_SurfaceLayer->set_drag_time(old_stage_time); }
 
         erf_slow_rhs_pre(level, finest_level, nrk, slow_dt, S_rhs, S_old, S_data,
@@ -240,8 +237,7 @@
         // *****************************************************************************
         if ( solverChoice.terrain_type == TerrainType::MovingFittedMesh )
         {
-            // base_state_new only ever gets FillBoundary (never the vertical base-state BC), so its
-            //   z-physical ghosts stay stale/uninitialized. Fill them before the column update reads them.
+            // Fill the ghost cells of the new base state before the column update reads them
             (*physbcs_base[level])(base_state_new[level],0,BaseState::num_comps,base_state_new[level].nGrowVect());
 
             MultiFab  r_hse_new (base_state_new[level], make_alias, BaseState::r0_comp, 1);
@@ -273,9 +269,7 @@
 #ifdef _OPENMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-           // NOTE: do NOT tile this loop. The flux update below reads the temporaries
-           //   rt0/rt0_new/r0_temp at k+-1, which (with tiling) would belong to a neighboring
-           //   z-tile not yet filled in this pass -> uninitialized reads at tile boundaries.
+           // No tiling: the flux update below reads rt0, rt0_new and r0_temp at k-1 and k+1
            for ( MFIter mfi(*p0); mfi.isValid(); ++mfi)
            {
                const Array4<Real      > rt0_arr     = rt0.array(mfi);
@@ -311,13 +305,9 @@
                    Real zflux_r_lo = -z_t_arr(i,j,k  ) * myhalf * (r0_tmp_arr(i,j,k) + r0_tmp_arr(i,j,k-1));
                    Real zflux_r_hi = -z_t_arr(i,j,k+1) * myhalf * (r0_tmp_arr(i,j,k) + r0_tmp_arr(i,j,k+1));
                    if (k == klo_base) {
-                       // The k-1 ghost of the base state is a zeroth-order copy of cell klo
-                       // (impose_vertical_basestate_bcs), so the centered average above collapses
-                       // to the CELL value where the FACE value is needed; under mesh motion this
-                       // halves the first cell's base-state transport (the cell then heaves at
-                       // half the surface displacement). Extrapolate linearly to the moving
-                       // bottom face instead. (The top face needs no analogue: the terrain
-                       // decay functions vanish at the lid, so z_t there is identically zero.)
+                       // The ghost cell below klo is a copy of cell klo, so the average above would give
+                       // the cell value; use the quadratic extrapolation to the bottom face from three
+                       // cells of equal spacing. At the top face z_t = 0.
                        zflux_r_lo = -z_t_arr(i,j,k) *
                            ( Real(1.875)*r0_tmp_arr(i,j,k) - Real(1.25)*r0_tmp_arr(i,j,k+1)
                             + Real(0.375)*r0_tmp_arr(i,j,k+2) );
@@ -326,7 +316,7 @@
                    Real zflux_rt_lo = zflux_r_lo * myhalf * (rt0_tmp_arr(i,j,k)/r0_tmp_arr(i,j,k) + rt0_tmp_arr(i,j,k-1)/r0_tmp_arr(i,j,k-1));
                    Real zflux_rt_hi = zflux_r_hi * myhalf * (rt0_tmp_arr(i,j,k)/r0_tmp_arr(i,j,k) + rt0_tmp_arr(i,j,k+1)/r0_tmp_arr(i,j,k+1));
                    if (k == klo_base) {
-                       // face value of theta_0 by the same one-sided extrapolation
+                       // theta_0 at the bottom face by the same extrapolation
                        zflux_rt_lo = zflux_r_lo *
                            ( Real(1.875)*(rt0_tmp_arr(i,j,k  )/r0_tmp_arr(i,j,k  ))
                             - Real(1.25)*(rt0_tmp_arr(i,j,k+1)/r0_tmp_arr(i,j,k+1))
@@ -351,14 +341,7 @@
             } // MFIter
             base_state_new[level].FillBoundary(fine_geom.periodicity());
 
-            // Impose the base-state BCs on the UPDATED base state using the NEW geometry, so the
-            //   z-physical ghost cells are consistent with the new valid data and the new mesh.
-            //   Without this, the ghosts keep the pre-update fill (previous base state on the
-            //   previous mesh) and the end-of-step copy hands those stale ghosts to the next step.
-            //   A checkpoint restart instead re-imposes these BCs on the restored base state
-            //   (ERF.cpp restart path), which produced DIFFERENT ghosts than an uninterrupted
-            //   run; bottom-boundary consumers of the base-state ghosts (e.g. the surface-layer
-            //   cons fill) then made restarted trajectories diverge from uninterrupted ones.
+            // Ghost cells of the updated base state on the new mesh, as at a restart
             ERFPhysBCFunct_base physbc_base_new(level, fine_geom, domain_bcs_type, domain_bcs_type_d,
                                                 z_phys_nd_new[level],
                                                 (solverChoice.terrain_type == TerrainType::MovingFittedMesh));

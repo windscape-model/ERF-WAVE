@@ -26,7 +26,8 @@
  */
 namespace WaveDrag {
 
-    // Orbital velocity (u_w, w_w) and slope dh/dx of the surface at x
+    // Orbital velocity (u_w, w_w) and slope dh/dx of the surface at x. During the ramp, w_w
+    // omits the part a R'(t) sin(kx - omega t) of dh/dt.
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE
     void surface_motion (const MovingWave& wave, const amrex::Real x, const amrex::Real time,
                          amrex::Real& u_w, amrex::Real& w_w, amrex::Real& dhdx)

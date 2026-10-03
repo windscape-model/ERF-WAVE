@@ -83,10 +83,7 @@ void make_mom_sources (Real time,
     bool use_Rayleigh_fast_uv = ( (solverChoice.dampingChoice.rayleigh_damping_type == RayleighDampingType::FastExplicit) ||
                                   (solverChoice.dampingChoice.rayleigh_damping_type == RayleighDampingType::FastImplicit) );
     bool use_Rayleigh_fast_w  = (solverChoice.dampingChoice.rayleigh_damping_type == RayleighDampingType::FastExplicit);
-    // FastImplicit applies the W damping implicitly inside every acoustic substep
-    // (erf_substep_*), so it must NOT also be added as an explicit source on either
-    // the slow or fast side (audit 2026-07-05 item 2.4a: the W term was double-applied,
-    // delivering ~2x the nominal dampcoef and binding dampcoef*dt to the RK stability limit).
+    // With FastImplicit the sub-steps damp w implicitly, so no explicit source is added for w
     bool w_damping_is_implicit = (solverChoice.dampingChoice.rayleigh_damping_type == RayleighDampingType::FastImplicit);
     bool use_canopy_fast = solverChoice.forest_substep;
     bool use_ImmersedForcing_fast = solverChoice.immersed_forcing_substep;

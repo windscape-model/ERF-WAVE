@@ -1100,10 +1100,7 @@ ERF::InitData_post ()
             (*physbcs_base[lev])(base_state[lev],0,base_state[lev].nComp(),base_state[lev].nGrowVect());
         }
 
-        // The SurfaceLayer (and its MOSTAverage reference-height maps) was constructed
-        // during MakeNewLevelFromScratch, BEFORE the checkpoint terrain and state were
-        // loaded. Rebuild the geometry-dependent maps from the restored terrain so a
-        // restarted run reproduces an uninterrupted one.
+        // The MOST reference heights were set before the terrain was read from the checkpoint
         if (m_SurfaceLayer) {
             for (int lev(0); lev <= finest_level; ++lev) {
                 m_SurfaceLayer->update_surface_geometry(lev);
@@ -3220,7 +3217,7 @@ ERF::check_state_for_nans(MultiFab const& S)
     }
 
     if (any_have_nans) {
-        amrex::Abort("NaNs in conserved state (check_state_for_nans)");   // nonzero exit; exit(0) masked failure from SLURM (audit 2.9)
+        amrex::Abort("NaNs in conserved state (check_state_for_nans)");
     }
 }
 
@@ -3247,7 +3244,7 @@ ERF::check_vels_for_nans(MultiFab const& xvel, MultiFab const& yvel, MultiFab co
         any_have_nans = true;
     }
     if (any_have_nans) {
-        amrex::Abort("NaNs in velocity (check_vels_for_nans)");   // nonzero exit (audit 2.9)
+        amrex::Abort("NaNs in velocity (check_vels_for_nans)");
     }
 }
 
@@ -3322,11 +3319,7 @@ ERF::check_for_negative_theta(amrex::MultiFab& S)
             });
     } // mfi
 
-    // Deterministic failure detection (audit 2026-07-05 item 2.9). The per-cell guard
-    // above prints locations but cannot stop a GPU run, and NaN makes its comparisons
-    // false, so a blown run "zombie-steps" NaN fields to completion and finalizes
-    // normally (5 of 13 production deaths were silent). These host-side reductions
-    // catch both non-positive and NaN states and abort with a nonzero exit code.
+    // Stop also on a GPU and for NaN values, which the comparisons above do not catch
     Real rho_min = S.min(Rho_comp,0);
     Real rt_min  = S.min(RhoTheta_comp,0);
     bool has_nan = S.contains_nan(Rho_comp,1,0) || S.contains_nan(RhoTheta_comp,1,0);

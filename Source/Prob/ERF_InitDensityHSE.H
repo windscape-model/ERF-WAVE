@@ -25,10 +25,7 @@ erf_init_dens_hse (amrex::MultiFab& rho_hse,
     const int domlo_z = geom.Domain().smallEnd(2);
     const int domhi_z = geom.Domain().bigEnd(2);
 
-    // The per-column terrain HSE integration below uses per-thread fixed-size stack arrays
-    // (Array1D<Real,0,MAX_HSE_Z-1>). MAX_HSE_Z caps the vertical cell count; raise it if you
-    // need a taller/finer column. NOTE: these arrays are per (i,j) thread, so the GPU-side
-    // transient init memory is ~MAX_HSE_Z * 8 B * (nx*ny) -- keep it only as large as needed.
+    // Size of the column arrays of each (i,j) thread below, the largest number of vertical cells
     constexpr int MAX_HSE_Z = 512;
     if (domhi_z > MAX_HSE_Z-1) amrex::Abort("1D Arrays in erf_init_dens_hse are hard-wired to MAX_HSE_Z high");
 

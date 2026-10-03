@@ -243,16 +243,7 @@ ImplicitDiffForMomLU_T (const Box& bx,
     TurbChoice tc = solverChoice.turbChoice[level];
     bool l_consA  = (dc.molec_diff_type == MolecDiffType::ConstantAlpha);
     bool l_turb   = tc.use_kturb;
-    // The implicitized quantity is tau_corr, whose du/dz (dv/dz) coefficient is HALF of
-    // the stress scaling mu_tot for the horizontal momenta (tau_corr = myhalf*du/dz*mu_tot,
-    // see the note below), but the full mu_tot for w (tau_corr = dw/dz*mu_tot).  The
-    // implicit operator must reapply exactly the coefficient the correction removed:
-    // using 2*mu for u and v double-counts the implicitized fraction of the vertical
-    // molecular diffusion, an effective (1 + implicit_fac) x viscosity (measured as a
-    // dt-independent 13% x implicit_fac amplitude excess on the viscous Stokes wall case).
-    // NOTE: the turbulent quarter-sum added in getRhoAlphaForFaces carries no matching
-    // factor either way; its consistency with the mu_tot used by ComputeStress deserves
-    // the same audit upstream (masked in LES runs where mu_turb dominates).
+    // The same coefficient as in tau_corr below: mu for u and v, 2 mu for w
     constexpr Real mu_fac = (stagdir == 2) ? two : one;
     Real mu_eff = (l_consA) ? mu_fac * dc.dynamic_viscosity / dc.rho0_trans
                             : mu_fac * dc.dynamic_viscosity;
@@ -379,14 +370,9 @@ ImplicitDiffForMomLU_T (const Box& bx,
                       c_tmp = zero;
                       RHS_a(i,j,klo) = zero;
                   } else {
-                      // Implicit wall flux with the SAME third-order one-sided stencil that built
-                      // tau_corr at the wall face (ComputeStrain_T, zl_*_dir): the flux this row
-                      // removes explicitly and the flux it reapplies implicitly must be the same
-                      // functional, or the implicitized fraction of their difference survives as a
-                      // dt-independent near-wall bias (measured 13% x implicit_fac against the
-                      // analytic Stokes layer on a moving orbital wall with the previous two-point
-                      // ghost form). The stencil is linear in the unknowns u(klo), u(klo+1), so the
-                      // tridiagonal structure is preserved; the known wall value goes to the RHS.
+                      // Implicit wall flux with the one-sided third-order stencil of tau_corr at the wall
+                      // face (ComputeStrain_T); it is linear in u(klo) and u(klo+1), so the system stays
+                      // tridiagonal, and the known wall velocity goes to the RHS
                       const int inode = i + (1 - ioff);
                       const int jnode = j + (1 - joff);
                       Real dz0  = myhalf * ( z_nd(i,j,klo+1) + z_nd(inode,jnode,klo+1)
@@ -400,14 +386,10 @@ ImplicitDiffForMomLU_T (const Box& bx,
                       Real s2   = -fs2*s3;
                       Real s1   = -(one-fs2)*s3;
                       Real wc   = Fact * rhoAlpha_lo * idz0;
-                      // Fold the u(klo) part through a_tmp (a_tmp enters this row only through
-                      // b_tmp = detJ*rho - a - c) and add the u(klo+1) part to c_tmp; with c_tmp
-                      // absorbing wc*s3, a_tmp = -wc*(s2 + s3) makes b_tmp come out exactly
-                      // detJ*rho - c_pure + wc*s2.
+                      // The u(klo) part enters through a_tmp (b_tmp = detJ*rho - a_tmp - c_tmp), the u(klo+1) part through c_tmp
                       a_tmp  = -wc * (s2 + s3);
                       c_tmp +=  wc * s3;
-                      // Known wall velocity: the momentum ghost divided by the same face-averaged
-                      // ghost density VelocityToMomentum multiplied in.
+                      // Wall velocity: the momentum ghost divided by its face density
                       Real rho_ghost_lo = myhalf * ( cell_data(i     ,j     ,klo-1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,klo-1,Rho_comp) );
                       RHS_a(i,j,klo) -= wc * s1 * face_data(i,j,klo-1) / rho_ghost_lo;
@@ -477,11 +459,7 @@ ImplicitDiffForMomLU_T (const Box& bx,
                       a_tmp = zero;
                       RHS_a(i,j,khi) = zero;
                   } else {
-                      // Mirror of the klo treatment: the implicit top-wall flux uses the same
-                      // third-order one-sided stencil as tau_corr's top-face value. u(khi-1)
-                      // couples through a_tmp, c_tmp = -wc*(s2+s3) makes b_tmp come out exactly
-                      // detJ*rho - a_pure + wc*s2, and the known wall velocity (the momentum
-                      // ghost divided by its face-averaged density) goes to the RHS.
+                      // As at the bottom wall: u(khi-1) through a_tmp, the u(khi) part through c_tmp
                       const int inode = i + (1 - ioff);
                       const int jnode = j + (1 - joff);
                       Real dz0  = myhalf * ( z_nd(i,j,khi+1) + z_nd(inode,jnode,khi+1)

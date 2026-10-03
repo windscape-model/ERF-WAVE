@@ -188,10 +188,8 @@
             prob->init_terrain_surface(fine_geom,terrain_fab_src,src_time);
             prob->init_terrain_surface(fine_geom,terrain_fab_new,new_stage_time);
 
-            // Surface one stage-interval before the step start: with IntervalStart sampling the
-            // stage grid velocity is the rate over the PRECEDING interval, i.e. evaluated at the
-            // start of the interval being advanced rather than across it.  This is the sampling
-            // the reduced free-stream model calls 'endpoint'.
+            // Surface one stage interval before the step start, for the grid velocity over the
+            // preceding interval (erf.grid_velocity_sampling = IntervalStart)
             const bool l_zt_start = (solverChoice.grid_velocity_sampling == GridVelocitySampling::IntervalStart);
             std::unique_ptr<MultiFab> z_nd_lag;
             if (l_zt_start) {
@@ -246,7 +244,7 @@
                 const Array4<Real const>& z_nd_old_raw =  z_phys_nd[lev]->const_array(mfi);
                 const Array4<Real const>& z_nd_lag_arr =  z_nd_lag ? z_nd_lag->const_array(mfi)
                                                                   : z_nd_old_raw;
-                // (old,new) across the stage interval, or (lagged,old) over the preceding one
+                // (old, new) over the stage interval, or (lagged, old) over the preceding one
                 const Array4<Real const>& z_nd_new_arr =  l_zt_start ? z_nd_old_raw : z_nd_new_raw;
                 const Array4<Real const>& z_nd_old_arr =  l_zt_start ? z_nd_lag_arr : z_nd_old_raw;
 
@@ -280,10 +278,9 @@
         FArrayBox terrain_fab_new(makeSlab(terrain_bx,2,0),1);
         prob->init_terrain_surface(fine_geom,terrain_fab_new,new_substep_time);
 
-        // Surface one sub-step back, used only when the grid velocity is sampled over the
-        // preceding interval instead of across this one (see GridVelocitySampling).
+        // Surface one sub-step back, for the grid velocity over the preceding interval
         const bool l_lagged_zt = (solverChoice.grid_velocity_sampling == GridVelocitySampling::IntervalStart);
-        FArrayBox terrain_fab_prv;   // sized only when the lagged sampling is on (used twice below)
+        FArrayBox terrain_fab_prv;
         if (l_lagged_zt) {
             terrain_fab_prv.resize(makeSlab(terrain_bx,2,0),1);
             prob->init_terrain_surface(fine_geom,terrain_fab_prv,old_substep_time-dtau);
@@ -303,7 +300,7 @@
         make_terrain_fitted_coords(lev,fine_geom,*z_phys_nd_new[lev], zlevels_stag[lev], phys_bc_type);
         make_J             (fine_geom,*z_phys_nd_new[lev], *detJ_cc_new[lev]);
 
-        // Fitted nodes one sub-step back (only built for the IntervalStart sampling).
+        // Mesh one sub-step back
         std::unique_ptr<MultiFab> prv_mf;
         if (l_lagged_zt) {
             prv_mf = std::make_unique<MultiFab>(z_phys_nd[lev]->boxArray(),
@@ -330,18 +327,15 @@
             const Array4<Real const>& z_nd_new_arr =  z_phys_nd_new[lev]->const_array(mfi);
             const Array4<Real const>& z_nd_old_arr =  z_phys_nd[lev]->const_array(mfi);
             const Array4<Real const>& z_nd_prv_arr =  prv_mf ? prv_mf->const_array(mfi) : z_nd_old_arr;
-            // The pair differenced below: (old,new) across this sub-step, or (prev,old) over the
-            // preceding one when the grid velocity is sampled at the sub-step start.
+            // (old, new) over this sub-step, or (previous, old) over the preceding one
             const Array4<Real const>& z_nd_lo_arr  =  l_lagged_zt ? z_nd_prv_arr : z_nd_old_arr;
             const Array4<Real const>& z_nd_ref_arr =  l_lagged_zt ? z_nd_old_arr : z_nd_new_arr;
 
             // Loop over horizontal plane
             amrex::ParallelFor(gbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                // Grid velocity across this sub-step: the discrete displacement rate, for which
-                // d(zt)/dzeta = (J^{m+1}-J^m)/dtau holds identically.  With IntervalStart
-                // sampling the rate over the PRECEDING interval is used instead, which breaks
-                // that identity at O(dtau).
+                // Grid velocity from the displacement over the sub-step, so that
+                // d(z_t)/dzeta = (J^{m+1} - J^m)/dtau (discrete geometric conservation law)
                 zp_t_arr(i,j,k) = fourth * inv_dt * (z_nd_ref_arr(i+1,j+1,k) - z_nd_lo_arr(i+1,j+1,k)
                                                   +z_nd_ref_arr(i  ,j+1,k) - z_nd_lo_arr(  i,j+1,k)
                                                   +z_nd_ref_arr(i+1,j  ,k) - z_nd_lo_arr(i+1,j  ,k)

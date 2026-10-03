@@ -223,16 +223,7 @@ ImplicitDiffForMomLU_N (const Box& bx,
     TurbChoice tc = solverChoice.turbChoice[level];
     bool l_consA  = (dc.molec_diff_type == MolecDiffType::ConstantAlpha);
     bool l_turb   = tc.use_kturb;
-    // The implicitized quantity is tau_corr, whose du/dz (dv/dz) coefficient is HALF of
-    // the stress scaling mu_tot for the horizontal momenta (tau_corr = myhalf*du/dz*mu_tot,
-    // see the note below), but the full mu_tot for w (tau_corr = dw/dz*mu_tot).  The
-    // implicit operator must reapply exactly the coefficient the correction removed:
-    // using 2*mu for u and v double-counts the implicitized fraction of the vertical
-    // molecular diffusion, an effective (1 + implicit_fac) x viscosity (measured as a
-    // dt-independent 13% x implicit_fac amplitude excess on the viscous Stokes wall case).
-    // NOTE: the turbulent quarter-sum added in getRhoAlphaForFaces carries no matching
-    // factor either way; its consistency with the mu_tot used by ComputeStress deserves
-    // the same audit upstream (masked in LES runs where mu_turb dominates).
+    // The same coefficient as in tau_corr below: mu for u and v, 2 mu for w
     constexpr Real mu_fac = (stagdir == 2) ? two : one;
     Real mu_eff = (l_consA) ? mu_fac * dc.dynamic_viscosity / dc.rho0_trans
                             : mu_fac * dc.dynamic_viscosity;
@@ -349,9 +340,7 @@ ImplicitDiffForMomLU_N (const Box& bx,
                       RHS_a(i,j,klo) = zero;
                   } else {
                       a_tmp = -two * Fact * rhoAlpha_lo * dz_inv;
-                      // Eliminate the known Dirichlet ghost into the RHS as -a_tmp*u_wall; the
-                      // unknowns are velocities, so divide the momentum ghost by its face-averaged
-                      // density. See ERF_ImplicitDiff_T.cpp for the full account.
+                      // Known wall velocity on the RHS: the momentum ghost divided by its face density
                       Real rho_ghost_lo = myhalf * ( cell_data(i     ,j     ,klo-1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,klo-1,Rho_comp) );
                       RHS_a(i,j,klo) -= a_tmp * face_data(i,j,klo-1) / rho_ghost_lo;
@@ -410,8 +399,7 @@ ImplicitDiffForMomLU_N (const Box& bx,
                       RHS_a(i,j,khi) = zero;
                   } else {
                       c_tmp = -two * Fact * rhoAlpha_hi * dz_inv;
-                      // Eliminate the known Dirichlet ghost into the RHS as -c_tmp*u_ghost; divide the
-                      // momentum ghost by its face-averaged density (see ERF_ImplicitDiff_T.cpp).
+                      // Known wall velocity on the RHS: the momentum ghost divided by its face density
                       Real rho_ghost_hi = myhalf * ( cell_data(i     ,j     ,khi+1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,khi+1,Rho_comp) );
                       RHS_a(i,j,khi) -= c_tmp * face_data(i,j,khi+1) / rho_ghost_hi;
