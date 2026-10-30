@@ -205,10 +205,10 @@ Status:
 ## Build variants (GNU make, from Exec/)
 
     make -j8 USE_NETCDF=FALSE                          -> ERF3d.gnu.TEST.MPI.ex      (gates g1,g2,g4,g5)
-    make -j8 USE_NETCDF=FALSE TERRAIN_VELOCITY=TRUE    -> ERF3d.gnu.TEST.MPI.TV.ex   (gate g3, WRLES smoke)
+    make -j8 USE_NETCDF=FALSE USE_TERRAIN_VELOCITY=TRUE    -> ERF3d.gnu.TEST.MPI.TV.ex   (gate g3, WRLES smoke)
     make -j8 USE_NETCDF=FALSE USE_FFT=TRUE FFTW_HOME=$FFTW \
                                                        -> ERF3d.gnu.TEST.MPI.FFT.ex  (anelastic wave work)
-    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE FFTW_HOME=$FFTW TERRAIN_VELOCITY=TRUE \
+    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE FFTW_HOME=$FFTW USE_TERRAIN_VELOCITY=TRUE \
                                                        -> ERF3d.gnu.TEST.MPI.TV.FFT.ex (anelastic Stokes)
 
 FFTW is the FFTW prefix: `$HOME/local` on the laptop of September 2026, `/opt/homebrew` (Homebrew

@@ -43,7 +43,7 @@ erf.abl_pressure_grad = -9.95e-4  0.  0.
 
 erf.substepping_type   = Implicit
 erf.fixed_mri_dt_ratio = 6
-erf.substep_time_order = 2
+erf.substep_metric_sampling = midpoint
 erf.beta_s             = 0.1
 erf.fixed_dt           = 0.005
 

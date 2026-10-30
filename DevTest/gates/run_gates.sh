@@ -78,7 +78,7 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
     ( cd "$EXEC_DIR" && make -j8 $XTRA USE_NETCDF=FALSE ) > "$GATES_DIR/_build_plain.log" 2>&1 \
         || { echo "BUILD FAILED (plain); see _build_plain.log"; exit 2; }
     echo "== Building the TERRAIN_VELOCITY executable =="
-    ( cd "$EXEC_DIR" && make -j8 $XTRA USE_NETCDF=FALSE TERRAIN_VELOCITY=TRUE ) > "$GATES_DIR/_build_tv.log" 2>&1 \
+    ( cd "$EXEC_DIR" && make -j8 $XTRA USE_NETCDF=FALSE USE_TERRAIN_VELOCITY=TRUE ) > "$GATES_DIR/_build_tv.log" 2>&1 \
         || { echo "BUILD FAILED (TV); see _build_tv.log"; exit 2; }
     # FFTW for the FFT build (anelastic gate g6): FFTW_HOME from the environment, else ~/local
     # (the laptop of September 2026), else Homebrew.

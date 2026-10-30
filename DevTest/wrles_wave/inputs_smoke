@@ -49,7 +49,7 @@ prob.custom_terrain_type = "MovingSineWave"
 prob.wavelength = 56.2
 prob.Ampl = 0.08
 prob.T_0  = 300.
-erf.substep_time_order = 1
+erf.substep_metric_sampling = endpoint
 
 erf.rayleigh_damping_type = FastImplicit
 erf.rayleigh_damp_W = 1
