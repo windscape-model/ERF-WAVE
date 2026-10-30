@@ -1,7 +1,7 @@
 # GATE g3: viscous Stokes layer over the moving wave, orbital no-slip wall (TERRAIN_VELOCITY build).
 # Derived from Exec/visc_test/inputs (the JCP viscous verification), cut to 250 steps (t=0.5).
 # Protects: TV orbital wall BC, constant molecular viscosity, FastImplicit Rayleigh sponge,
-# the deprecated erf.substep_time_order=1 alias path, explicit vertical diffusion.
+# the endpoint metric sampling named explicitly, explicit vertical diffusion.
 erf.prob_name = "Moving Terrain"
 erf.init_type = Isentropic
 stop_time = 1.0

@@ -77,7 +77,7 @@ Open items, in order:
   (hard abort otherwise). Local FFT build works (see Build variants below).
 - Divergence operator: `ERF_ComputeDivergence.cpp` (ax, ay, detJ metrics; z-flux is
   Omega). Momentum correction adds solver fluxes directly to (rho0 u, rho0 v, Omega).
-- Stage A tests (this session, FFT build, 20 steps each, `anelastic_wave/`):
+- Stage A tests (2026-09-01, FFT build, 20 steps each, `anelastic_wave/`):
   - static wave: runs clean, projected divergence 3e-13.
   - moving wave AS-IS: runs, no assert stops it, solver reports divergence 5e-14 —
     but of the WRONG (static-mesh) constraint. Silent inconsistency, see below.

@@ -5,12 +5,12 @@ inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/
 
 number of MPI processes: 4
 
-CPU time used since start of simulation (CPU-hours): 0.00030931
+CPU time used since start of simulation (CPU-hours): 0.000386574
 
 ===============================================================================
  Plotfile Information
 ===============================================================================
-output data / time: Thu Oct 29 19:04:40 2026
+output data / time: Thu Oct 29 19:41:17 2026
 output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/_work/g4_wmles_most_wavedrag
 
 
@@ -130,7 +130,7 @@ erf.rayleigh_damp_W = 1
 erf.rayleigh_dampcoef = 200.0
 erf.rayleigh_damping_type = FastImplicit
 erf.rayleigh_zdamp = 100.0
-erf.substep_time_order = 2
+erf.substep_metric_sampling = midpoint
 erf.substepping_type = Implicit
 erf.sum_interval = -1
 erf.terrain_smoothing = 2
