@@ -206,17 +206,19 @@ Status:
 
     make -j8 USE_NETCDF=FALSE                          -> ERF3d.gnu.TEST.MPI.ex      (gates g1,g2,g4,g5)
     make -j8 USE_NETCDF=FALSE TERRAIN_VELOCITY=TRUE    -> ERF3d.gnu.TEST.MPI.TV.ex   (gate g3, WRLES smoke)
-    CPATH=$HOME/local/include LIBRARY_PATH=$HOME/local/lib \
-    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE             -> ERF3d.gnu.TEST.MPI.FFT.ex  (anelastic wave work)
-    CPATH=$HOME/local/include LIBRARY_PATH=$HOME/local/lib \
-    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE TERRAIN_VELOCITY=TRUE \
+    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE FFTW_HOME=$FFTW \
+                                                       -> ERF3d.gnu.TEST.MPI.FFT.ex  (anelastic wave work)
+    make -j8 USE_NETCDF=FALSE USE_FFT=TRUE FFTW_HOME=$FFTW TERRAIN_VELOCITY=TRUE \
                                                        -> ERF3d.gnu.TEST.MPI.TV.FFT.ex (anelastic Stokes)
 
-USE_NETCDF=FALSE because the local NetCDF (4.10.1 in ~/local) lost parallel support
-(`netcdf_par.h` gone); no wave or gate case reads NetCDF. The July NetCDF-enabled
-executables are preserved as `Exec/ERF3d.jul25-nc-keep.ex` / `.TV.ex`.
-The FFT variant links FFTW from ~/local via CPATH/LIBRARY_PATH; each variant has its
-own object directory, so the three executables coexist.
+FFTW is the FFTW prefix: `$HOME/local` on the laptop of September 2026, `/opt/homebrew` (Homebrew
+fftw) since October 2026; `run_gates.sh` finds it. USE_NETCDF=FALSE: no wave or gate case reads
+NetCDF, and neither laptop has a parallel NetCDF. Under Apple clang add
+`XTRA_CXXFLAGS=-ffp-exception-behavior=maytrap` to every build, after removing `tmp_build_dir`
+(make does not track flag changes): the decks set `amrex.fpe_trap_invalid = 1`, and the default
+exception behavior lets a speculated floating-point operation of the moving-terrain initializer
+trip the trap (SIGILL on Apple Silicon); the results are unchanged bit for bit. Each variant has
+its own object directory, so the executables coexist.
 
 ## Standing protections
 
@@ -226,3 +228,32 @@ own object directory, so the three executables coexist.
 - Test runs write only under `DevTest/`; `Exec/` run directories, `verification_runs/`,
   and `mrigark_paper/` stay untouched.
 - `jcp-writing-pass` receives nothing from this branch before submission.
+
+## Status 2026-10-29: the manuscript code merged in
+
+- Merge commit `ecaf57f4` brings the tag `jcp-manuscript-2026-10-02` (= `eff4101c` on
+  `jcp-writing-pass`) into this branch: the acoustic sub-step corrections D1 (volume-change
+  tendency of the implicit predictor), D9 (perturbation flux with each state on its own mesh),
+  D4 (conservative w reconstruction), D2 (grid-velocity flux in the predictor) and D5 (slow
+  tendency with the stage volume); the stress-divergence correction D10 (bottom Omega = z_t on
+  the moving surface); the input `prob.wave_c`; the diagnostic options `erf.slow_geometry_time`
+  and `erf.substep_volume_sampling`. Fork commits `5b8a38ad`, `827054ac`, `eff4101c`; records
+  `review_substep_mt_2026-09-19/` and `review_devbranch_fixes_2026-10-29.md` in the fork's top
+  folder.
+- Gates: before the merge all six PASS on the laptop of October 2026 (Apple clang 21, Homebrew
+  open-mpi and FFTW, the trap flag above). After the merge g5 and g6 are unchanged to the last bit
+  (no acoustic sub-step, no stress on a moving surface), and g1 to g4 change. Their references were
+  regenerated from the merged binaries (FORCE_REFS=1), and the binaries built from the tag itself
+  reproduce the new references bit for bit. Size of the change in the final plotfile, relative:
+  inviscid wave (g1, g2) u and w 3e-3, p' 2e-2; Stokes layer (g3) u and w 9e-3, p' 0.46 (D10 adds
+  the isotropic first-cell stress to the small p' of this case); wall-modeled LES (g4) u 1e-6,
+  w 3e-5, p' 8e-6 after 30 steps.
+- Capability matrix: the compressible DNS, wall-resolved LES and wall-modeled LES over the moving
+  wave now run the corrected sub-step and stress. The anelastic moving-mesh path has no acoustic
+  sub-step, and its slow tendency already enters with the stage volume (the J_src weight of the
+  refold), so only D10 reaches its viscous cases (Stokes DNS, WRLES smoke, WMLES mini): the
+  first-cell pressure changes, the velocities at second order only. Their validation numbers above
+  were measured before D10 and are re-measured when those cases run again.
+- The open observation of `base_state_rebuild.md` (first-order fast error of u, w and theta at
+  beta_s = 0) is explained: the w part was D1, the u and theta part is the dtau/2 lag of the
+  forward-backward sub-step scheme (fork record `review_substep_mt_2026-09-19/REPORT.md`).

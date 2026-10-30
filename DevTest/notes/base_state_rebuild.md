@@ -51,3 +51,9 @@ against M = 32: the differences follow (1/M - 1/32) with a constant coefficient 
 cancels exactly at fixed dtau (coupling rates 2.00 in every norm). It is not a half-sub-step
 time offset of the field (no correlation with du/dt) and a static-mesh test from the
 potential-flow field was transient-dominated and inconclusive. Mechanism undiagnosed.
+
+Resolved 2026-10-29: the fork's review of 2026-09-19 (`review_substep_mt_2026-09-19/REPORT.md`)
+traced the w part to the missing volume-change tendency of the implicit predictor (D1; with it
+the sub-step order of w rises from 1.0 to 1.6-1.9) and the u and theta part to the dtau/2 lag of
+the forward-backward sub-step scheme. D1 and the other corrections are in this branch since the
+merge of the tag `jcp-manuscript-2026-10-02` (commit `ecaf57f4`).

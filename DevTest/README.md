@@ -35,8 +35,14 @@ Usage, from `DevTest/gates/`:
     ./run_gates.sh --make-refs     # generate missing references (first time only)
 
 PASS means the final plotfile matches the stored reference within 1e-12 on every field.
-Builds here use `USE_NETCDF=FALSE` because the local NetCDF (4.10.1, `~/local`) has no
-parallel support since the August environment change; no gate or wave case reads NetCDF.
+Builds use `USE_NETCDF=FALSE`: no gate or wave case reads NetCDF, and the laptops of 2026 have
+no parallel NetCDF. The FFT build takes FFTW from `FFTW_HOME`, else `~/local`, else Homebrew.
+Under Apple clang the script adds `XTRA_CXXFLAGS=-ffp-exception-behavior=maytrap`: the decks set
+`amrex.fpe_trap_invalid = 1`, and without the flag a speculated floating-point operation of the
+moving-terrain initializer trips the trap; the results are unchanged bit for bit.
+References: g1 to g4 regenerated on 2026-10-29 from the merged manuscript code (merge commit
+`ecaf57f4` of the tag `jcp-manuscript-2026-10-02`, confirmed bit for bit by the binaries built
+from the tag itself); g5 and g6 unchanged since 2026-09-01.
 
 ## Layout
 

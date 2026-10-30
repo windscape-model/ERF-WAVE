@@ -1,32 +1,32 @@
 ===============================================================================
  ERF Job Information
 ===============================================================================
-inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/DevTest/gates/g4_wmles_most_wavedrag/inputs
+inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/g4_wmles_most_wavedrag/inputs
 
 number of MPI processes: 4
 
-CPU time used since start of simulation (CPU-hours): 0.000443698
+CPU time used since start of simulation (CPU-hours): 0.00030931
 
 ===============================================================================
  Plotfile Information
 ===============================================================================
-output data / time: Tue Sep  1 01:30:25 2026
-output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/DevTest/gates/_work/g4_wmles_most_wavedrag
+output data / time: Thu Oct 29 19:04:40 2026
+output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/_work/g4_wmles_most_wavedrag
 
 
 ===============================================================================
  Build Information
 ===============================================================================
-build date:    2026-08-09 06:50:46.804758
-build machine: Darwin ml-5561504 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:25:34 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6020 arm64
-build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-Research/ERF/Exec
+build date:    2026-10-29 18:47:05.917107
+build machine: Darwin gp-vpn-blue-tu61-128-15-198-119.llnl.gov 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:06:40 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T6050 arm64
+build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/Exec
 AMReX dir:     ..//Submodules/AMReX
 
-COMP:          llvm
-COMP version:  Apple clang version 21.0.0 (clang-2100.1.1.101)
+COMP:          gnu
+COMP version:  21.0.0
 
 
-ERF       git hash: midpoint-o2-manuscript-2026-07-24-84-gb7725d70-dirty
+ERF       git hash: manuscript-pre-jcp-pass-72-gba97d480e
 AMReX       git hash: 750b74d
 
 
