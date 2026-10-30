@@ -160,7 +160,7 @@ ImplicitDiffForStateLU_T (const Box& bx,
                 met_h_zeta_lo = Compute_h_zeta_AtKface(i,j,khi  ,cellSizeInv,z_nd);
                 met_h_zeta_hi = Compute_h_zeta_AtKface(i,j,khi+1,cellSizeInv,z_nd);
 
-                a_tmp      = -Fact * rhoAlpha_lo * dz_inv / met_h_zeta_hi;
+                a_tmp      = -Fact * rhoAlpha_lo * dz_inv / met_h_zeta_lo;   // lower-face metric (upstream #3542)
                 c_tmp      = zero;
                 b_tmp      = detJ(i,j,khi) * cell_data(i,j,khi,Rho_comp) - a_tmp - c_tmp;
                 inv_b2_tmp = one / (b_tmp - a_tmp * coeffG_a(i,j,khi-1));
@@ -194,6 +194,29 @@ ImplicitDiffForStateLU_T (const Box& bx,
 #endif
 }
 
+namespace {
+/**
+ * h_zeta on the z-face k of a u (stagdir 0) or v (stagdir 1) column: the edge value by which
+ * ComputeStrain_T divides the correction stress tau13 / tau23, so that the flux the implicit solve
+ * removes at the old state and the flux it puts back use the same stencil.  With a different
+ * h_zeta the split leaves the operator changed by implicit_fac * (L_solve - L_tau_corr) wherever
+ * h_zeta varies non-linearly along the column's horizontal neighbours, as on a curved,
+ * height-decaying wave-following mesh.  (Algorithm of erf-model/ERF, October 2026.)  For w
+ * (stagdir 2, not solved implicitly) the cell-face value.
+ */
+template <int stagdir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE
+Real
+MomFaceHZeta (int i, int j, int k,
+              const GpuArray<Real, AMREX_SPACEDIM>& cellSizeInv,
+              const Array4<const Real>& z_nd) noexcept
+{
+    if constexpr (stagdir == 0)      { return Compute_h_zeta_AtEdgeCenterJ(i,j,k,cellSizeInv,z_nd); }
+    else if constexpr (stagdir == 1) { return Compute_h_zeta_AtEdgeCenterI(i,j,k,cellSizeInv,z_nd); }
+    else                             { return Compute_h_zeta_AtKface(i,j,k,cellSizeInv,z_nd); }
+}
+} // namespace
+
 /**
  * Function for computing the implicit contribution to the vertical diffusion
  * of momentum, over terrain.
@@ -220,7 +243,7 @@ ImplicitDiffForStateLU_T (const Box& bx,
 template <int stagdir>
 void
 ImplicitDiffForMomLU_T (const Box& bx,
-                        const Box& /*domain*/,
+                        const Box& domain,
                         const int level,
                         const Real dt,
                         const Array4<const Real>& cell_data,
@@ -265,6 +288,10 @@ ImplicitDiffForMomLU_T (const Box& bx,
     int jhi = bx.bigEnd(1);
     int klo = bx.smallEnd(2);
     int khi = bx.bigEnd(2);
+    // Rows at a box end inside the domain are closed with the known face value, not with a wall
+    // (the grids are whole in z unless erf.max_grid_size_z asks otherwise)
+    const int dom_klo = domain.smallEnd(2);
+    const int dom_khi = domain.bigEnd(2);
     amrex::ignore_unused(ilo, ihi, jlo, jhi);
 
     // Temporary FABs for tridiagonal solve (allocated on column)
@@ -353,10 +380,8 @@ ImplicitDiffForMomLU_T (const Box& bx,
                                   cell_data, mu_turb, mu_eff,
                                   l_consA, l_turb);
 
-              met_h_zeta_lo = myhalf * ( Compute_h_zeta_AtKface(i     ,j     ,klo  ,cellSizeInv,z_nd)
-                                     + Compute_h_zeta_AtKface(i-ioff,j-joff,klo  ,cellSizeInv,z_nd) );
-              met_h_zeta_hi = myhalf * ( Compute_h_zeta_AtKface(i     ,j     ,klo+1,cellSizeInv,z_nd)
-                                     + Compute_h_zeta_AtKface(i-ioff,j-joff,klo+1,cellSizeInv,z_nd) );
+              met_h_zeta_lo = MomFaceHZeta<stagdir>(i,j,klo,cellSizeInv,z_nd);
+              met_h_zeta_hi = MomFaceHZeta<stagdir>(i,j,klo+1,cellSizeInv,z_nd);
 
               a_tmp = zero;
               c_tmp = -Fact * gfac * rhoAlpha_hi * dz_inv / met_h_zeta_hi;
@@ -364,7 +389,14 @@ ImplicitDiffForMomLU_T (const Box& bx,
               RHS_a(i,j,klo) = detJface * face_data(i,j,klo); // NOTE: this is momenta; solution is velocity
 
               // BCs: Dirichlet (u_i = val), slip wall (w = 0), or surface layer (w = 0)
-              if (ext_dir_on_zlo) {
+              if (klo != dom_klo) {
+                  // Grid boundary inside the domain: close the system with the known face value below
+                  a_tmp = -Fact * rhoAlpha_lo * dz_inv / met_h_zeta_lo;
+                  RHS_a(i,j,klo) += Fact * gfac * (tau_corr(i,j,klo+1) - tau_corr(i,j,klo));
+                  const Real rho_below = myhalf * ( cell_data(i     ,j     ,klo-1,Rho_comp)
+                                                  + cell_data(i-ioff,j-joff,klo-1,Rho_comp) );
+                  RHS_a(i,j,klo) -= a_tmp * (face_data(i,j,klo-1) / rho_below);
+              } else if (ext_dir_on_zlo) {
                   RHS_a(i,j,klo) += Fact * gfac * (tau_corr(i,j,klo+1) - tau_corr(i,j,klo));
                   if (stagdir==2) {
                       c_tmp = zero;
@@ -416,10 +448,8 @@ ImplicitDiffForMomLU_T (const Box& bx,
                                   cell_data, mu_turb, mu_eff,
                                   l_consA, l_turb);
 
-              met_h_zeta_lo = myhalf * ( Compute_h_zeta_AtKface(i     ,j     ,k  ,cellSizeInv,z_nd)
-                                    + Compute_h_zeta_AtKface(i-ioff,j-joff,k  ,cellSizeInv,z_nd) );
-              met_h_zeta_hi = myhalf * ( Compute_h_zeta_AtKface(i     ,j     ,k+1,cellSizeInv,z_nd)
-                                    + Compute_h_zeta_AtKface(i-ioff,j-joff,k+1,cellSizeInv,z_nd) );
+              met_h_zeta_lo = MomFaceHZeta<stagdir>(i,j,k,cellSizeInv,z_nd);
+              met_h_zeta_hi = MomFaceHZeta<stagdir>(i,j,k+1,cellSizeInv,z_nd);
 
               a_tmp      = -Fact * rhoAlpha_lo * dz_inv / met_h_zeta_lo;
               c_tmp      = -Fact * rhoAlpha_hi * dz_inv / met_h_zeta_hi;
@@ -442,10 +472,8 @@ ImplicitDiffForMomLU_T (const Box& bx,
                                   cell_data, mu_turb, mu_eff,
                                   l_consA, l_turb);
 
-              met_h_zeta_lo = myhalf * ( Compute_h_zeta_AtKface(i     ,j     ,khi  ,cellSizeInv,z_nd)
-                                    + Compute_h_zeta_AtKface(i-ioff,j-joff,khi  ,cellSizeInv,z_nd) );
-              met_h_zeta_hi = myhalf * ( Compute_h_zeta_AtKface(i     ,j     ,khi+1,cellSizeInv,z_nd)
-                                    + Compute_h_zeta_AtKface(i-ioff,j-joff,khi+1,cellSizeInv,z_nd) );
+              met_h_zeta_lo = MomFaceHZeta<stagdir>(i,j,khi,cellSizeInv,z_nd);
+              met_h_zeta_hi = MomFaceHZeta<stagdir>(i,j,khi+1,cellSizeInv,z_nd);
 
               a_tmp = -Fact * gfac * rhoAlpha_lo * dz_inv / met_h_zeta_lo;
               c_tmp = zero;
@@ -454,7 +482,13 @@ ImplicitDiffForMomLU_T (const Box& bx,
               RHS_a(i,j,khi) += Fact * gfac * (tau_corr(i,j,khi+1) - tau_corr(i,j,khi));
 
               // BCs: Dirichlet (u_i = val), slip wall (w = 0)
-              if (ext_dir_on_zhi) {
+              if (khi != dom_khi) {
+                  // Grid boundary inside the domain: close the system with the known face value above
+                  c_tmp = -Fact * rhoAlpha_hi * dz_inv / met_h_zeta_hi;
+                  const Real rho_above = myhalf * ( cell_data(i     ,j     ,khi+1,Rho_comp)
+                                                  + cell_data(i-ioff,j-joff,khi+1,Rho_comp) );
+                  RHS_a(i,j,khi) -= c_tmp * (face_data(i,j,khi+1) / rho_above);
+              } else if (ext_dir_on_zhi) {
                   if (stagdir==2) {
                       a_tmp = zero;
                       RHS_a(i,j,khi) = zero;
