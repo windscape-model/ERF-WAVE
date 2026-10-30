@@ -49,12 +49,15 @@ Open items, in order:
 1. Physics validation of WRLES: a resolved channel-over-wave at moderate Re_tau against
    the literature (or against a DNS of the same case). Needs an HPC-scale run; design
    the deck from `Exec/CanonicalTests/Channel_DNS` plus the wave bottom.
-2. `erf.vert_implicit=1` with the moving wall: the implicit vertical-diffusion path is
-   inconsistent with the moving-terrain metric update (documented in
-   `Exec/visc_test/SETUP_NOTES.md`: fast crash; earlier measurement: ~20 percent Stokes
-   amplitude error). Wall-resolved grids want implicit vertical diffusion, so this is
-   worth fixing behind a flag. Entry points: `Source/Diffusion/ERF_ImplicitDiff_T.cpp`,
-   `Source/TimeIntegration/ERF_ImplicitPre.H` / `ERF_ImplicitPost.H`.
+2. RESOLVED (2026-10-29). The May crash and the July 14-percent error of `erf.vert_implicit=1`
+   on the moving wall were the wall term and the doubled coefficient of the implicit solve,
+   fixed in the fork on 2026-05-27 and 2026-07-25. On 2026-10-29 the terrain kernel took the
+   face metric of the strain kernel and the row closure at grid ends (erf-model/ERF, October
+   2026); the flat and stretched kernels took the one-sided wall gradient. Measured on the
+   manuscript Stokes layer at full duration: implicit and explicit agree to 1.07e-5 m/s at
+   dt 0.004 s and 1.7e-7 m/s at dt 5e-4 s (second order in dt, the splitting error), with the
+   same error against the analytic solution at every period. Implicit vertical diffusion is
+   available for the wall-resolved cases.
 3. RESOLVED (2026-09-01, full read): the tau13/tau23 metric cross-term in
    `ERF_ComputeStress_T.cpp` averages `rhoAlpha_bar` (molecular) alongside `mu_bar`
    (eddy) and sums both into `mu_tot` -- the molecular part IS included. The earlier
