@@ -339,11 +339,21 @@ ImplicitDiffForMomLU_N (const Box& bx,
                       c_tmp = zero;
                       RHS_a(i,j,klo) = zero;
                   } else {
-                      a_tmp = -two * Fact * rhoAlpha_lo * dz_inv;
-                      // Known wall velocity on the RHS: the momentum ghost divided by its face density
+                      // Implicit wall flux with the one-sided third-order stencil of the explicit wall
+                      // stress (ComputeStrain_N: weights -8/3, 3, -1/3 over dz for the wall value and the
+                      // first two cells), as ERF_ImplicitDiff_T.cpp does on terrain.  It is linear in
+                      // u(klo) and u(klo+1), so the system stays tridiagonal; the known wall velocity goes
+                      // to the RHS.  The removed and reapplied wall fluxes are then the same functional.
+                      const Real s1 = -eightthirds;
+                      const Real s2 = three;
+                      const Real s3 = -third;
+                      Real wc = Fact * rhoAlpha_lo * dz_inv;
+                      a_tmp  = -wc * (s2 + s3);
+                      c_tmp +=  wc * s3;
+                      // Wall velocity: the momentum ghost divided by its face density
                       Real rho_ghost_lo = myhalf * ( cell_data(i     ,j     ,klo-1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,klo-1,Rho_comp) );
-                      RHS_a(i,j,klo) -= a_tmp * face_data(i,j,klo-1) / rho_ghost_lo;
+                      RHS_a(i,j,klo) -= wc * s1 * face_data(i,j,klo-1) / rho_ghost_lo;
                   }
               } else if (use_SurfLayer) {
                   // NOTE: tau = -mu*d_z(u_i) w/ SL
@@ -398,11 +408,16 @@ ImplicitDiffForMomLU_N (const Box& bx,
                       a_tmp = zero;
                       RHS_a(i,j,khi) = zero;
                   } else {
-                      c_tmp = -two * Fact * rhoAlpha_hi * dz_inv;
-                      // Known wall velocity on the RHS: the momentum ghost divided by its face density
+                      // As at the bottom wall: the u(khi-1) part through a_tmp, the u(khi) part through c_tmp
+                      const Real s1 = -eightthirds;
+                      const Real s2 = three;
+                      const Real s3 = -third;
+                      Real wc = Fact * rhoAlpha_hi * dz_inv;
+                      a_tmp +=  wc * s3;
+                      c_tmp  = -wc * (s2 + s3);
                       Real rho_ghost_hi = myhalf * ( cell_data(i     ,j     ,khi+1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,khi+1,Rho_comp) );
-                      RHS_a(i,j,khi) -= c_tmp * face_data(i,j,khi+1) / rho_ghost_hi;
+                      RHS_a(i,j,khi) -= wc * s1 * face_data(i,j,khi+1) / rho_ghost_hi;
                   }
               }
 

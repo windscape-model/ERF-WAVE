@@ -354,11 +354,25 @@ ImplicitDiffForMomLU_S (const Box& bx,
                       c_tmp = 0.;
                       RHS_a(i,j,klo) = 0.;
                   } else {
-                      a_tmp = -two * Fact * rhoAlpha_lo * dz_inv_lo * dz_inv;
-                      // Known wall velocity on the RHS: the momentum ghost divided by its face density
+                      // Implicit wall flux with the one-sided third-order stencil of the explicit wall
+                      // stress (ComputeStrain_S), as ERF_ImplicitDiff_T.cpp does on terrain: dz0 and dz1
+                      // are the heights of the first two cells; linear in u(klo) and u(klo+1), the known
+                      // wall velocity on the RHS.
+                      Real dz0  = dz_ptr[klo];
+                      Real dz1  = dz_ptr[klo+1];
+                      Real idz0 = one / dz0;
+                      Real fs   = (dz1 / dz0) + two;
+                      Real fs2  = fs*fs;
+                      Real s3   = two / (fs - fs2);
+                      Real s2   = -fs2*s3;
+                      Real s1   = -(one-fs2)*s3;
+                      Real wc   = Fact * rhoAlpha_lo * idz0 * dz_inv;
+                      a_tmp  = -wc * (s2 + s3);
+                      c_tmp +=  wc * s3;
+                      // Wall velocity: the momentum ghost divided by its face density
                       Real rho_ghost_lo = myhalf * ( cell_data(i     ,j     ,klo-1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,klo-1,Rho_comp) );
-                      RHS_a(i,j,klo) -= a_tmp * face_data(i,j,klo-1) / rho_ghost_lo;
+                      RHS_a(i,j,klo) -= wc * s1 * face_data(i,j,klo-1) / rho_ghost_lo;
                   }
               } else if (use_SurfLayer) {
                   // NOTE: tau = -mu*d_z(u_i) w/ SL
@@ -421,11 +435,21 @@ ImplicitDiffForMomLU_S (const Box& bx,
                       a_tmp = zero;
                       RHS_a(i,j,khi) = zero;
                   } else {
-                      c_tmp = -two * Fact * rhoAlpha_hi * dz_inv_hi * dz_inv;
-                      // Known wall velocity on the RHS: the momentum ghost divided by its face density
+                      // As at the bottom wall: the u(khi-1) part through a_tmp, the u(khi) part through c_tmp
+                      Real dz0  = dz_ptr[khi];
+                      Real dz1  = dz_ptr[khi-1];
+                      Real idz0 = one / dz0;
+                      Real fs   = (dz1 / dz0) + two;
+                      Real fs2  = fs*fs;
+                      Real s3   = two / (fs - fs2);
+                      Real s2   = -fs2*s3;
+                      Real s1   = -(one-fs2)*s3;
+                      Real wc   = Fact * rhoAlpha_hi * idz0 * dz_inv;
+                      a_tmp +=  wc * s3;
+                      c_tmp  = -wc * (s2 + s3);
                       Real rho_ghost_hi = myhalf * ( cell_data(i     ,j     ,khi+1,Rho_comp)
                                                    + cell_data(i-ioff,j-joff,khi+1,Rho_comp) );
-                      RHS_a(i,j,khi) -= c_tmp * face_data(i,j,khi+1) / rho_ghost_hi;
+                      RHS_a(i,j,khi) -= wc * s1 * face_data(i,j,khi+1) / rho_ghost_hi;
                   }
               }
 
