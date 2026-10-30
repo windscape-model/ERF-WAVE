@@ -72,10 +72,15 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
     echo "== Building the TERRAIN_VELOCITY executable =="
     ( cd "$EXEC_DIR" && make -j8 USE_NETCDF=FALSE TERRAIN_VELOCITY=TRUE ) > "$GATES_DIR/_build_tv.log" 2>&1 \
         || { echo "BUILD FAILED (TV); see _build_tv.log"; exit 2; }
-    # FFTW lives in ~/local (no system paths); the FFT build hosts the anelastic gate g6.
-    echo "== Building the FFT executable =="
-    ( cd "$EXEC_DIR" && CPATH=$HOME/local/include LIBRARY_PATH=$HOME/local/lib \
-      make -j8 USE_NETCDF=FALSE USE_FFT=TRUE ) > "$GATES_DIR/_build_fft.log" 2>&1 \
+    # FFTW for the FFT build (anelastic gate g6): FFTW_HOME from the environment, else ~/local
+    # (the laptop of September 2026), else Homebrew.
+    if [ -z "${FFTW_HOME:-}" ]; then
+        if   [ -f "$HOME/local/include/fftw3.h" ]; then FFTW_HOME="$HOME/local";
+        elif [ -f /opt/homebrew/include/fftw3.h ]; then FFTW_HOME=/opt/homebrew;
+        else echo "BUILD FAILED (FFT): fftw3.h not found; set FFTW_HOME"; exit 2; fi
+    fi
+    echo "== Building the FFT executable (FFTW_HOME=$FFTW_HOME) =="
+    ( cd "$EXEC_DIR" && make -j8 USE_NETCDF=FALSE USE_FFT=TRUE FFTW_HOME="$FFTW_HOME" ) > "$GATES_DIR/_build_fft.log" 2>&1 \
         || { echo "BUILD FAILED (FFT); see _build_fft.log"; exit 2; }
 fi
 
