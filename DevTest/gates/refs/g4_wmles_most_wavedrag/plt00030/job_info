@@ -1,32 +1,32 @@
 ===============================================================================
  ERF Job Information
 ===============================================================================
-inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/g4_wmles_most_wavedrag/inputs
+inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-wave-public-dev/DevTest/gates/g4_wmles_most_wavedrag/inputs
 
 number of MPI processes: 4
 
-CPU time used since start of simulation (CPU-hours): 0.000386574
+CPU time used since start of simulation (CPU-hours): 0.000569249
 
 ===============================================================================
  Plotfile Information
 ===============================================================================
-output data / time: Thu Oct 29 19:41:17 2026
-output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/_work/g4_wmles_most_wavedrag
+output data / time: Sat Nov  7 08:49:07 2026
+output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-wave-public-dev/DevTest/gates/_work/g4_wmles_most_wavedrag
 
 
 ===============================================================================
  Build Information
 ===============================================================================
-build date:    2026-10-29 18:47:05.917107
+build date:    2026-10-29 19:59:50.716900
 build machine: Darwin gp-vpn-blue-tu61-128-15-198-119.llnl.gov 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:06:40 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T6050 arm64
-build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/Exec
+build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-wave-public-dev/Exec
 AMReX dir:     ..//Submodules/AMReX
 
 COMP:          gnu
 COMP version:  21.0.0
 
 
-ERF       git hash: manuscript-pre-jcp-pass-72-gba97d480e
+ERF       git hash: 98df82e5a-dirty
 AMReX       git hash: 750b74d
 
 

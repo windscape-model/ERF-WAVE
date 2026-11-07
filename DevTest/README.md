@@ -43,6 +43,9 @@ moving-terrain initializer trips the trap; the results are unchanged bit for bit
 References: g1 to g4 regenerated on 2026-10-29 from the merged manuscript code (merge commit
 `ecaf57f4` of the tag `jcp-manuscript-2026-10-02`, confirmed bit for bit by the binaries built
 from the tag itself); g5 and g6 unchanged since 2026-09-01.
+g3 and g4 regenerated on 2026-11-07 after the terrain-strain correction (commit 926f45c3, upstream #4214):
+the old references differed from the corrected code by 3.6e-5 (g3, x_velocity) and 1e-9 (g4) relative;
+g1, g2, g5 and g6 are unchanged by it (inviscid or flat).
 
 ## Layout
 

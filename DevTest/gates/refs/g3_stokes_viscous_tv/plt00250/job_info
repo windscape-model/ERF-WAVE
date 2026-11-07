@@ -1,32 +1,32 @@
 ===============================================================================
  ERF Job Information
 ===============================================================================
-inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/g3_stokes_viscous_tv/inputs
+inputs file: /Users/li100/Documents/Research/ERF-Wave/ERF-wave-public-dev/DevTest/gates/g3_stokes_viscous_tv/inputs
 
 number of MPI processes: 4
 
-CPU time used since start of simulation (CPU-hours): 0.00275799
+CPU time used since start of simulation (CPU-hours): 0.0240772
 
 ===============================================================================
  Plotfile Information
 ===============================================================================
-output data / time: Thu Oct 29 19:04:40 2026
-output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/DevTest/gates/_work/g3_stokes_viscous_tv
+output data / time: Sat Nov  7 08:49:07 2026
+output dir:         /Users/li100/Documents/Research/ERF-Wave/ERF-wave-public-dev/DevTest/gates/_work/g3_stokes_viscous_tv
 
 
 ===============================================================================
  Build Information
 ===============================================================================
-build date:    2026-10-29 18:47:05.917107
+build date:    2026-10-29 19:59:50.716900
 build machine: Darwin gp-vpn-blue-tu61-128-15-198-119.llnl.gov 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:06:40 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T6050 arm64
-build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-dev-wave-capabilities/Exec
+build dir:     /Users/li100/Documents/Research/ERF-Wave/ERF-wave-public-dev/Exec
 AMReX dir:     ..//Submodules/AMReX
 
 COMP:          gnu
 COMP version:  21.0.0
 
 
-ERF       git hash: manuscript-pre-jcp-pass-72-gba97d480e
+ERF       git hash: 98df82e5a-dirty
 AMReX       git hash: 750b74d
 
 
@@ -127,7 +127,7 @@ erf.rayleigh_dampcoef = 200
 erf.rayleigh_damping_type = FastImplicit
 erf.rayleigh_zdamp = 40.0
 erf.rho0_trans = 1.0
-erf.substep_time_order = 1
+erf.substep_metric_sampling = endpoint
 erf.substepping_type = Implicit
 erf.sum_interval = -1
 erf.terrain_smoothing = 2
